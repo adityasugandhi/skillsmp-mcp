@@ -221,7 +221,7 @@ export async function fetchAndScanSkill(githubUrl: string): Promise<FetchScanRes
     const dirResp = await fetch(apiUrl, {
       headers: {
         Accept: "application/vnd.github.v3+json",
-        "User-Agent": "skillsmp-mcp-scanner/1.0",
+        "User-Agent": "skillsync-mcp-scanner/1.0",
       },
     });
 

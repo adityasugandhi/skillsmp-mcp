@@ -50,12 +50,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/adityasugandhi/skillsmp-mcp.git"
+    "url": "git+https://github.com/adityasugandhi/skillsync-mcp.git"
   },
   "bugs": {
-    "url": "https://github.com/adityasugandhi/skillsmp-mcp/issues"
+    "url": "https://github.com/adityasugandhi/skillsync-mcp/issues"
   },
-  "homepage": "https://github.com/adityasugandhi/skillsmp-mcp#readme",
+  "homepage": "https://github.com/adityasugandhi/skillsync-mcp#readme",
   "engines": {
     "node": ">=20.0.0"
   },

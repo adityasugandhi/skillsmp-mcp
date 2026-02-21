@@ -241,7 +241,7 @@ async function fetchSkillFiles(parsed: ParsedGitHubUrl): Promise<SkillFile[]> {
   const dirResp = await fetch(apiUrl, {
     headers: {
       Accept: "application/vnd.github.v3+json",
-      "User-Agent": "skillsmp-mcp-installer/1.0",
+      "User-Agent": "skillsync-mcp-installer/1.0",
     },
   });
 

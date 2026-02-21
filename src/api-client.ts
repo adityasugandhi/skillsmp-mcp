@@ -51,7 +51,7 @@ async function apiFetch<T>(url: string): Promise<T> {
   const apiKey = getApiKey();
   const headers: Record<string, string> = {
     Accept: "application/json",
-    "User-Agent": "skillsmp-mcp-server/1.0",
+    "User-Agent": "skillsync-mcp-server/1.0",
   };
   if (apiKey) {
     headers["Authorization"] = `Bearer ${apiKey}`;
