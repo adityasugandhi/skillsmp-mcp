@@ -1,6 +1,9 @@
 {
-  "name": "skillsmp-mcp",
-  "version": "1.0.0",
+  "name": "@stranzwersweb2/skillsmp-mcp",
+  "version": "1.1.0",
+  "publishConfig": {
+    "access": "public"
+  },
   "description": "MCP server for SkillsMP — search, scan, install & uninstall Claude Code skills with built-in security scanning",
   "type": "module",
   "main": "build/index.js",

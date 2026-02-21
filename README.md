@@ -36,7 +36,7 @@ Add to `~/.claude/settings.json`:
   "mcpServers": {
     "skillsmp": {
       "command": "npx",
-      "args": ["-y", "skillsmp-mcp"]
+      "args": ["-y", "@stranzwersweb2/skillsmp-mcp"]
     }
   }
 }
@@ -53,7 +53,7 @@ Add to `~/.openclaw/mcp.json`:
       "version": "1.0.0",
       "autoUpdate": false,
       "command": "npx",
-      "args": ["-y", "skillsmp-mcp@1.0.0"]
+      "args": ["-y", "@stranzwersweb2/skillsmp-mcp@1.0.0"]
     }
   }
 }
@@ -70,7 +70,7 @@ Add to `.cursor/mcp.json` in your project root:
   "mcpServers": {
     "skillsmp": {
       "command": "npx",
-      "args": ["-y", "skillsmp-mcp"]
+      "args": ["-y", "@stranzwersweb2/skillsmp-mcp"]
     }
   }
 }
@@ -85,7 +85,7 @@ Add to `~/.windsurf/mcp.json`:
   "mcpServers": {
     "skillsmp": {
       "command": "npx",
-      "args": ["-y", "skillsmp-mcp"]
+      "args": ["-y", "@stranzwersweb2/skillsmp-mcp"]
     }
   }
 }
@@ -94,7 +94,7 @@ Add to `~/.windsurf/mcp.json`:
 ### Global install
 
 ```bash
-npm install -g skillsmp-mcp
+npm install -g @stranzwersweb2/skillsmp-mcp
 ```
 
 Then reference in any MCP config:
