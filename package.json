@@ -1,15 +1,15 @@
 {
-  "name": "@stranzwersweb2/skillsmp-mcp",
-  "version": "1.1.0",
+  "name": "@stranzwersweb2/skillsync-mcp",
+  "version": "1.3.0",
   "publishConfig": {
     "access": "public"
   },
-  "description": "MCP server for SkillsMP — search, scan, install & uninstall Claude Code skills with built-in security scanning",
+  "description": "SkillSync MCP server — search, scan, install & manage Claude Code skills with built-in security scanning and startup verification",
   "type": "module",
   "main": "build/index.js",
   "types": "build/index.d.ts",
   "bin": {
-    "skillsmp-mcp": "build/index.js"
+    "skillsync-mcp": "build/index.js"
   },
   "files": [
     "build/"
@@ -19,20 +19,28 @@
     "dev": "tsx watch src/index.ts",
     "start": "node build/index.js",
     "prepublishOnly": "npm run build",
-    "test": "node --test src/__tests__/security-scanner.test.ts",
-    "test:build": "tsc && node --test build/__tests__/security-scanner.test.js"
+    "test": "node --test src/__tests__/security-scanner.test.ts src/__tests__/skill-manager.test.ts src/__tests__/sync-engine.test.ts",
+    "test:build": "tsc && node --test build/__tests__/security-scanner.test.js build/__tests__/skill-manager.test.js build/__tests__/sync-engine.test.js"
   },
   "keywords": [
     "mcp",
     "model-context-protocol",
     "claude",
     "claude-code",
+    "openclaw",
+    "cursor",
+    "windsurf",
     "skills",
+    "skillsync",
     "skillsmp",
     "marketplace",
     "security-scanner",
+    "security",
+    "threat-detection",
     "ai-tools",
-    "anthropic"
+    "ai-agent",
+    "anthropic",
+    "prompt-injection"
   ],
   "author": {
     "name": "Aditya Sugandhi",

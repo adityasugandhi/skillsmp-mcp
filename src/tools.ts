@@ -4,6 +4,10 @@ import { searchSkills, aiSearchSkills } from "./api-client.js";
 import { fetchAndScanSkill } from "./security-scanner.js";
 import { installSkill, uninstallSkill } from "./installer.js";
 import { sanitizeText, sanitizeUrl } from "./sanitize.js";
+import { skillManager } from "./skill-manager.js";
+import { syncEngine } from "./sync-engine.js";
+import { readSyncConfig, writeSyncConfig, mergeSyncConfig, addSubscription, removeSubscription } from "./sync-config.js";
+import { readSyncLock, isSyncManaged } from "./sync-lock.js";
 import type { SkillResult, AiSearchResult } from "./api-client.js";
 
 // ─── Output Formatting (sanitized against prompt injection) ──────────────────
@@ -244,6 +248,17 @@ export function registerTools(server: McpServer): void {
     async ({ githubUrl, name, force }) => {
       try {
         const result = await installSkill(githubUrl, name, force);
+
+        // Update skill registry
+        const skillName = result.installPath.split("/").pop();
+        if (skillName) {
+          try {
+            await skillManager.scanLocalSkill(skillName);
+          } catch {
+            // Non-fatal — registry will catch up on next sync
+          }
+        }
+
         const lines = [
           `## Skill Installed Successfully`,
           "",
@@ -281,6 +296,7 @@ export function registerTools(server: McpServer): void {
     async ({ name }) => {
       try {
         const result = await uninstallSkill(name);
+        skillManager.removeSkill(name);
         return {
           content: [{
             type: "text",
@@ -290,6 +306,333 @@ export function registerTools(server: McpServer): void {
       } catch (error) {
         const msg = error instanceof Error ? error.message : "Unknown error";
         return { content: [{ type: "text", text: `Uninstall failed: ${msg}` }], isError: true };
+      }
+    }
+  );
+
+  // 7. List installed skills
+  server.tool(
+    "skillsmp_list_installed",
+    "List all installed skills with security status. Discovers skills in ~/.claude/skills/ and shows their risk levels from the last security scan.",
+    {
+      refresh: z.boolean().default(false).describe("Force re-sync before listing (re-scans all skills)"),
+    },
+    async ({ refresh }) => {
+      try {
+        if (refresh) {
+          const sync = await skillManager.syncRegistry();
+          const syncLines: string[] = [];
+          if (sync.added.length > 0) syncLines.push(`**Added**: ${sync.added.join(", ")}`);
+          if (sync.removed.length > 0) syncLines.push(`**Removed**: ${sync.removed.join(", ")}`);
+          if (sync.modified.length > 0) syncLines.push(`**Modified**: ${sync.modified.join(", ")}`);
+          if (syncLines.length > 0) {
+            syncLines.unshift("### Sync Changes\n");
+            syncLines.push("");
+          }
+        }
+
+        const summary = skillManager.getSummary();
+
+        if (summary.total === 0) {
+          const notReady = !skillManager.initialized
+            ? "\n\n> Skill scanning is still in progress. Try again with `refresh: true` in a moment."
+            : "";
+          return {
+            content: [{
+              type: "text",
+              text: `## Installed Skills\n\nNo skills found in \`~/.claude/skills/\`.${notReady}`,
+            }],
+          };
+        }
+
+        const riskEmoji: Record<string, string> = {
+          safe: "\\u2705", low: "\\uD83D\\uDFE1", medium: "\\uD83D\\uDFE0", high: "\\uD83D\\uDD34", critical: "\\uD83D\\uDEAB",
+        };
+
+        const lines = [
+          `## Installed Skills (${summary.total})`,
+          "",
+          `| Skill | Risk | Files | SKILL.md | Last Scanned |`,
+          `|-------|------|-------|----------|--------------|`,
+        ];
+
+        for (const s of summary.skills) {
+          const emoji = riskEmoji[s.riskLevel] || "";
+          const md = s.hasSkillMd ? "Yes" : "No";
+          const scanned = s.lastScanned.split("T")[0];
+          lines.push(`| ${s.name} | ${emoji} ${s.riskLevel.toUpperCase()} | ${s.filesCount} | ${md} | ${scanned} |`);
+        }
+
+        lines.push("");
+        const riskSummary = Object.entries(summary.byRisk)
+          .filter(([, count]) => count > 0)
+          .map(([level, count]) => `${level}: ${count}`)
+          .join(", ");
+        lines.push(`**Risk Summary**: ${riskSummary || "none"}`);
+
+        return { content: [{ type: "text", text: lines.join("\n") }] };
+      } catch (error) {
+        return { content: [{ type: "text", text: `List failed: ${error instanceof Error ? error.message : "Unknown error"}` }], isError: true };
+      }
+    }
+  );
+
+  // 8. Audit a specific installed skill
+  server.tool(
+    "skillsmp_audit_installed",
+    "Deep security audit of a specific installed skill. Forces a fresh scan and returns a detailed threat report.",
+    {
+      name: z.string().min(1).max(64).describe("Name of the installed skill to audit"),
+    },
+    async ({ name }) => {
+      try {
+        const skill = await skillManager.scanLocalSkill(name);
+        const riskEmoji: Record<string, string> = {
+          safe: "\\u2705", low: "\\uD83D\\uDFE1", medium: "\\uD83D\\uDFE0", high: "\\uD83D\\uDD34", critical: "\\uD83D\\uDEAB",
+        };
+
+        const lines = [
+          `## Security Audit: "${name}"`,
+          `**Path**: \`${skill.path}\``,
+          `**Risk Level**: ${riskEmoji[skill.scanResult.riskLevel] || ""} ${skill.scanResult.riskLevel.toUpperCase()}`,
+          `**Files Scanned**: ${skill.filesCount}`,
+          `**Total Size**: ${Math.round(skill.totalSize / 1024)}KB`,
+          `**Safe to Use**: ${skill.scanResult.safe ? "Yes" : "NO"}`,
+          `**SKILL.md**: ${skill.hasSkillMd ? "Found" : "Missing"}`,
+          `**Content Hash (SHA-256)**: \`${skill.contentHash}\``,
+          `**Last Scanned**: ${new Date(skill.lastScanned).toISOString()}`,
+        ];
+
+        lines.push("", `### Recommendation`, skill.scanResult.recommendation);
+
+        if (skill.scanResult.threats.length > 0) {
+          lines.push("", "### Threats Found", "");
+          for (const threat of skill.scanResult.threats) {
+            const icon = threat.severity === "critical" ? "\\uD83D\\uDEAB" : "\\u26A0\\uFE0F";
+            const lineInfo = threat.line ? ` (line ${threat.line})` : "";
+            lines.push(`${icon} **${threat.severity.toUpperCase()}** [${threat.category}]${lineInfo}: ${threat.description}`);
+          }
+        } else {
+          lines.push("", "### No Threats Found", "This skill passed all security checks.");
+        }
+
+        return { content: [{ type: "text", text: lines.join("\n") }] };
+      } catch (error) {
+        return { content: [{ type: "text", text: `Audit failed: ${error instanceof Error ? error.message : "Unknown error"}` }], isError: true };
+      }
+    }
+  );
+
+  // 9. Configure sync subscriptions
+  server.tool(
+    "skillsync_configure",
+    "Manage sync subscriptions and settings. Add/remove search subscriptions, configure sync interval, risk threshold, and conflict policy.",
+    {
+      action: z.enum(["add", "remove", "list", "set"]).describe("Action: add subscription, remove subscription, list config, or set global options"),
+      query: z.string().min(1).max(200).optional().describe("Search query for new subscription (action=add)"),
+      authors: z.array(z.string()).optional().describe("Filter by authors (action=add)"),
+      tags: z.array(z.string()).optional().describe("Filter by tags (action=add)"),
+      limit: z.number().min(1).max(100).optional().describe("Max results per subscription (action=add, default 20)"),
+      sortBy: z.enum(["stars", "recent"]).optional().describe("Sort order for subscription (action=add)"),
+      subscriptionId: z.string().optional().describe("Subscription ID to remove (action=remove)"),
+      syncIntervalHours: z.number().min(0).max(168).optional().describe("Sync interval in hours, 0=manual only (action=set)"),
+      maxRiskLevel: z.enum(["safe", "low", "medium"]).optional().describe("Max risk level for auto-install (action=set)"),
+      conflictPolicy: z.enum(["skip", "overwrite", "unmanage"]).optional().describe("How to handle locally modified skills (action=set)"),
+      autoRemove: z.boolean().optional().describe("Auto-remove skills no longer in subscriptions (action=set)"),
+      enabled: z.boolean().optional().describe("Enable/disable sync engine (action=set)"),
+    },
+    async ({ action, query, authors, tags, limit, sortBy, subscriptionId, syncIntervalHours, maxRiskLevel, conflictPolicy, autoRemove, enabled }) => {
+      try {
+        if (action === "add") {
+          if (!query) {
+            return { content: [{ type: "text", text: "Missing required `query` parameter for add action." }], isError: true };
+          }
+          const { config, subscription } = await addSubscription({ query, authors, tags, limit, sortBy });
+          const lines = [
+            `## Subscription Added`,
+            "",
+            `- **ID**: \`${subscription.id}\``,
+            `- **Query**: "${sanitizeText(query)}"`,
+          ];
+          if (authors?.length) lines.push(`- **Authors**: ${authors.join(", ")}`);
+          if (tags?.length) lines.push(`- **Tags**: ${tags.join(", ")}`);
+          if (limit) lines.push(`- **Limit**: ${limit}`);
+          if (sortBy) lines.push(`- **Sort**: ${sortBy}`);
+          lines.push("", `Total subscriptions: ${config.subscriptions.length}`);
+          return { content: [{ type: "text", text: lines.join("\n") }] };
+        }
+
+        if (action === "remove") {
+          if (!subscriptionId) {
+            return { content: [{ type: "text", text: "Missing required `subscriptionId` parameter for remove action." }], isError: true };
+          }
+          const { config, removed } = await removeSubscription(subscriptionId);
+          if (!removed) {
+            return { content: [{ type: "text", text: `Subscription \`${subscriptionId}\` not found.` }], isError: true };
+          }
+          return { content: [{ type: "text", text: `## Subscription Removed\n\nID: \`${subscriptionId}\`\nRemaining subscriptions: ${config.subscriptions.length}` }] };
+        }
+
+        if (action === "set") {
+          const partial: Record<string, unknown> = {};
+          if (syncIntervalHours !== undefined) partial.syncIntervalHours = syncIntervalHours;
+          if (maxRiskLevel !== undefined) partial.maxRiskLevel = maxRiskLevel;
+          if (conflictPolicy !== undefined) partial.conflictPolicy = conflictPolicy;
+          if (autoRemove !== undefined) partial.autoRemove = autoRemove;
+          if (enabled !== undefined) partial.enabled = enabled;
+
+          if (Object.keys(partial).length === 0) {
+            return { content: [{ type: "text", text: "No settings provided to update. Use parameters like `syncIntervalHours`, `maxRiskLevel`, etc." }], isError: true };
+          }
+
+          const config = await mergeSyncConfig(partial as any);
+
+          // Restart periodic sync if interval changed
+          if (syncIntervalHours !== undefined) {
+            syncEngine.stopPeriodicSync();
+            await syncEngine.startPeriodicSync();
+          }
+
+          const lines = [
+            `## Settings Updated`,
+            "",
+            `- **Enabled**: ${config.enabled}`,
+            `- **Sync Interval**: ${config.syncIntervalHours}h (0=manual)`,
+            `- **Max Risk**: ${config.maxRiskLevel}`,
+            `- **Conflict Policy**: ${config.conflictPolicy}`,
+            `- **Auto-Remove**: ${config.autoRemove}`,
+            `- **Subscriptions**: ${config.subscriptions.length}`,
+          ];
+          return { content: [{ type: "text", text: lines.join("\n") }] };
+        }
+
+        // action === "list"
+        const config = await readSyncConfig();
+        const lines = [
+          `## SkillSync Configuration`,
+          "",
+          `- **Enabled**: ${config.enabled}`,
+          `- **Sync Interval**: ${config.syncIntervalHours}h (0=manual only)`,
+          `- **Max Risk Level**: ${config.maxRiskLevel}`,
+          `- **Conflict Policy**: ${config.conflictPolicy}`,
+          `- **Auto-Remove**: ${config.autoRemove}`,
+          "",
+        ];
+
+        if (config.subscriptions.length === 0) {
+          lines.push("### Subscriptions\n\nNo subscriptions configured. Use `action: \"add\"` to create one.");
+        } else {
+          lines.push("### Subscriptions", "", "| # | Query | Authors | Tags | Limit | Sort | Enabled | ID |", "|---|-------|---------|------|-------|------|---------|-----|");
+          config.subscriptions.forEach((sub, i) => {
+            lines.push(`| ${i + 1} | ${sanitizeText(sub.query)} | ${sub.authors?.join(", ") || "-"} | ${sub.tags?.join(", ") || "-"} | ${sub.limit ?? 20} | ${sub.sortBy ?? "stars"} | ${sub.enabled !== false ? "Yes" : "No"} | \`${sub.id.substring(0, 8)}...\` |`);
+          });
+        }
+
+        return { content: [{ type: "text", text: lines.join("\n") }] };
+      } catch (error) {
+        return { content: [{ type: "text", text: `Configure failed: ${error instanceof Error ? error.message : "Unknown error"}` }], isError: true };
+      }
+    }
+  );
+
+  // 10. Run sync now
+  server.tool(
+    "skillsync_sync_now",
+    "Run a sync cycle: poll subscriptions, diff against installed skills, install/update/remove. Use dryRun=true to preview without changes.",
+    {
+      dryRun: z.boolean().default(false).describe("Preview changes without executing (default false)"),
+    },
+    async ({ dryRun }) => {
+      try {
+        const report = await syncEngine.sync({ dryRun });
+        const lines = [
+          `## Sync ${dryRun ? "Preview (Dry Run)" : "Complete"}`,
+          "",
+          `- **Started**: ${report.startedAt}`,
+          `- **Finished**: ${report.finishedAt}`,
+          `- **Discovered**: ${report.totalDiscovered} skills`,
+          `- **Installed**: ${report.installed}`,
+          `- **Updated**: ${report.updated}`,
+          `- **Removed**: ${report.removed}`,
+          `- **Skipped**: ${report.skipped}`,
+          `- **Errors**: ${report.errors}`,
+        ];
+
+        if (report.actions.length > 0) {
+          const emoji: Record<string, string> = {
+            install: "+", update: "~", remove: "-",
+            "skip-conflict": "!", "skip-risk": "!", unmanage: "x", error: "E",
+          };
+          lines.push("", "### Actions", "", "| # | Type | Skill | Reason |", "|---|------|-------|--------|");
+          report.actions.forEach((a, i) => {
+            const icon = emoji[a.type] || "?";
+            lines.push(`| ${i + 1} | [${icon}] ${a.type} | ${sanitizeText(a.skillName) || "-"} | ${sanitizeText(a.reason)} |`);
+          });
+        } else {
+          lines.push("", "No actions needed — everything is in sync.");
+        }
+
+        if (dryRun && report.actions.some((a) => a.type === "install" || a.type === "update" || a.type === "remove")) {
+          lines.push("", "> This was a dry run. Call `skillsync_sync_now` with `dryRun: false` to apply changes.");
+        }
+
+        return { content: [{ type: "text", text: lines.join("\n") }] };
+      } catch (error) {
+        return { content: [{ type: "text", text: `Sync failed: ${error instanceof Error ? error.message : "Unknown error"}` }], isError: true };
+      }
+    }
+  );
+
+  // 11. Sync status
+  server.tool(
+    "skillsync_status",
+    "Show sync engine status: managed vs manual skills, subscriptions, last sync time, next scheduled sync.",
+    {},
+    async () => {
+      try {
+        const status = await syncEngine.getStatus();
+        const lock = await readSyncLock();
+        const allSkills = skillManager.getAllSkills();
+        const managedNames = new Set(Object.keys(lock.skills));
+        const manualSkills = allSkills.filter((s) => !managedNames.has(s.name));
+
+        const lines = [
+          `## SkillSync Status`,
+          "",
+          `- **Enabled**: ${status.enabled}`,
+          `- **Syncing**: ${status.syncing ? "Yes (in progress)" : "No"}`,
+          `- **Sync Interval**: ${status.intervalHours}h${status.intervalHours === 0 ? " (manual only)" : ""}`,
+          `- **Last Sync**: ${status.lastSyncRun || "Never"}`,
+          `- **Sync Count**: ${status.syncCount}`,
+          `- **Next Sync**: ${status.nextSyncIn || "N/A"}`,
+          "",
+          `### Skills`,
+          `- **Managed** (sync-controlled): ${status.managedSkills}`,
+          `- **Manual** (user-installed): ${manualSkills.length}`,
+          `- **Total installed**: ${allSkills.length}`,
+          "",
+          `### Active Subscriptions: ${status.subscriptions}`,
+        ];
+
+        if (status.managedSkills > 0) {
+          lines.push("", "### Managed Skills", "", "| Skill | Risk | Synced | Source |", "|-------|------|--------|--------|");
+          for (const [name, locked] of Object.entries(lock.skills)) {
+            const url = sanitizeUrl(locked.githubUrl);
+            const urlShort = url.length > 50 ? url.substring(0, 47) + "..." : url;
+            lines.push(`| ${name} | ${locked.riskLevel} | ${locked.lastSynced.split("T")[0]} | ${urlShort} |`);
+          }
+        }
+
+        if (manualSkills.length > 0) {
+          lines.push("", "### Manual Skills (not sync-managed)", "");
+          for (const skill of manualSkills) {
+            lines.push(`- ${skill.name} (${skill.scanResult.riskLevel})`);
+          }
+        }
+
+        return { content: [{ type: "text", text: lines.join("\n") }] };
+      } catch (error) {
+        return { content: [{ type: "text", text: `Status failed: ${error instanceof Error ? error.message : "Unknown error"}` }], isError: true };
       }
     }
   );

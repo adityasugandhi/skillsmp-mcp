@@ -48,6 +48,24 @@ export const TEXT_EXTENSIONS = new Set([
 // ─── Sanitization ────────────────────────────────────────────────────────────
 
 /** Characters/patterns that could be used for markdown injection in tool output */
+// ─── Watcher ────────────────────────────────────────────────────────────────
+
+export const WATCH_DEBOUNCE_MS = 500;
+
+// ─── Sync Engine ────────────────────────────────────────────────────────────
+
+export const SYNC_CONFIG_PATH = join(homedir(), ".claude", "skillsync.json");
+export const SYNC_LOCK_PATH = join(homedir(), ".claude", "skillsync.lock");
+export const SYNC_API_DELAY_MS = 200;
+export const SYNC_DEFAULT_INTERVAL_HOURS = 0;
+export const SYNC_DEFAULT_MAX_RISK = "low" as const;
+export const SYNC_DEFAULT_CONFLICT_POLICY = "skip" as const;
+export const RISK_LEVEL_ORDER: Record<string, number> = {
+  safe: 0, low: 1, medium: 2, high: 3, critical: 4,
+};
+
+// ─── Sanitization ────────────────────────────────────────────────────────────
+
 export const SANITIZE_PATTERNS: Array<[RegExp, string]> = [
   [/\u200B|\u200C|\u200D|\u2060|\uFEFF/g, ""], // zero-width chars
   [/\u202A|\u202B|\u202C|\u202D|\u202E|\u2066|\u2067|\u2068|\u2069/g, ""], // bidi overrides
