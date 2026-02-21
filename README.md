@@ -27,7 +27,7 @@ An MCP (Model Context Protocol) server for [SkillsMP](https://skillsmp.com) -- t
 |---|---|---|---|
 | Security scan before install | No | No | Yes -- 60+ patterns |
 | Blocks critical threats | No | No | Yes -- prompt injection, RCE, credential theft |
-| Multi-client support | N/A | Varies | Claude Code, OpenClaw, Cursor, Windsurf, nanobot |
+| Multi-client support | N/A | Varies | Claude Code, OpenClaw, Cursor, Windsurf, GitHub Copilot, Zed, nanobot |
 | Marketplace search | Manual | Some | Built-in keyword + AI semantic search |
 | Startup verification | No | No | Yes -- fs.watch + content hash |
 | Output sanitization | No | No | Yes -- anti prompt injection |
@@ -47,7 +47,7 @@ An MCP (Model Context Protocol) server for [SkillsMP](https://skillsmp.com) -- t
 
 ## Compatible With
 
-> Works with **Claude Code** | **OpenClaw** | **Cursor** | **Windsurf** | **nanobot** -- any MCP-compatible client
+> Works with **Claude Code** | **OpenClaw** | **Cursor** | **Windsurf** | **GitHub Copilot** | **Zed** | **nanobot** -- any MCP-compatible client
 
 ## Install
 
@@ -115,6 +115,44 @@ Add to `~/.windsurf/mcp.json`:
 }
 ```
 
+### GitHub Copilot
+
+Add to `.github/copilot-mcp.json` in your project root, or `~/.github/copilot-mcp.json` for global config:
+
+```json
+{
+  "mcpServers": {
+    "skillsync": {
+      "command": "npx",
+      "args": ["-y", "@stranzwersweb2/skillsync-mcp"],
+      "env": {
+        "SKILLSMP_API_KEY": "your-api-key"
+      }
+    }
+  }
+}
+```
+
+### Zed
+
+Add to `~/.config/zed/settings.json` under the `"context_servers"` key:
+
+```json
+{
+  "context_servers": {
+    "skillsync": {
+      "command": {
+        "path": "npx",
+        "args": ["-y", "@stranzwersweb2/skillsync-mcp"],
+        "env": {
+          "SKILLSMP_API_KEY": "your-api-key"
+        }
+      }
+    }
+  }
+}
+```
+
 ### Global install
 
 ```bash
@@ -141,6 +179,8 @@ Then reference in any MCP config:
 | OpenClaw | `~/.openclaw/mcp.json` | `SKILL.md` (same format, ClawHub registry) |
 | Cursor | `.cursor/mcp.json` | MCP tools only |
 | Windsurf | `~/.windsurf/mcp.json` | MCP tools only |
+| GitHub Copilot | `.github/copilot-mcp.json` | MCP tools only |
+| Zed | `~/.config/zed/settings.json` | MCP tools only |
 | nanobot | MCP config | MCP tools only |
 
 ## Security Model
@@ -223,7 +263,7 @@ npm run test:build  # Build + run tests
 ## Requirements
 
 - Node.js >= 20
-- Any MCP-compatible client (Claude Code, OpenClaw, Cursor, Windsurf, nanobot, etc.)
+- Any MCP-compatible client (Claude Code, OpenClaw, Cursor, Windsurf, GitHub Copilot, Zed, nanobot, etc.)
 
 ## Contributing
 

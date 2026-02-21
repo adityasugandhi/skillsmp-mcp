@@ -21,6 +21,11 @@ export const CRITICAL_PATTERNS: ThreatPattern[] = [
   { regex: /\u200B|\u200C|\u200D|\u2060|\uFEFF/, severity: "critical", description: "Prompt injection: zero-width Unicode characters hiding content", category: "prompt-injection" },
   { regex: /\u202A|\u202B|\u202C|\u202D|\u202E|\u2066|\u2067|\u2068|\u2069/, severity: "critical", description: "Prompt injection: bidirectional text override characters", category: "prompt-injection" },
 
+  // ── UNICODE HOMOGLYPH ATTACKS ──
+  { regex: /[\u0430\u0435\u043E\u0440\u0441\u0445\u0456\u0458\u0455\u04BB].*[a-zA-Z]|[a-zA-Z].*[\u0430\u0435\u043E\u0440\u0441\u0445\u0456\u0458\u0455\u04BB]/, severity: "critical", description: "Prompt injection: Cyrillic homoglyph characters mixed with ASCII (visual spoofing)", category: "prompt-injection" },
+  { regex: /[\u03B1\u03B5\u03BF\u03C1\u03BA\u03BD\u03C4\u0391\u0392\u0395\u0396\u0397\u039A\u039C\u039D\u039F\u03A1\u03A4].*[a-zA-Z]|[a-zA-Z].*[\u03B1\u03B5\u03BF\u03C1\u03BA\u03BD\u03C4\u0391\u0392\u0395\u0396\u0397\u039A\u039C\u039D\u039F\u03A1\u03A4]/, severity: "critical", description: "Prompt injection: Greek homoglyph characters mixed with ASCII (visual spoofing)", category: "prompt-injection" },
+  { regex: /[\u0250-\u02AF\u1D00-\u1D7F\u2100-\u214F\uFF01-\uFF5E]/, severity: "critical", description: "Prompt injection: Unicode confusable characters from IPA/letterlike/fullwidth ranges", category: "prompt-injection" },
+
   // ── DESTRUCTIVE SHELL ──
   { regex: /rm\s+-[a-z]*r[a-z]*f[a-z]*\s+\//, severity: "critical", description: "Destructive removal of root filesystem", category: "destructive" },
   { regex: /rm\s+-[a-z]*f[a-z]*r[a-z]*\s+\//, severity: "critical", description: "Destructive removal of root filesystem (flag reorder)", category: "destructive" },
@@ -122,6 +127,11 @@ export const WARNING_PATTERNS: ThreatPattern[] = [
   { regex: /dig\s+.*\$[\({]/, severity: "warning", description: "DNS exfiltration: variable interpolation in dig", category: "exfiltration" },
   { regex: /nslookup\s+.*\$[\({]/, severity: "warning", description: "DNS exfiltration: variable interpolation in nslookup", category: "exfiltration" },
   { regex: /dns\.resolve|dns\.lookup.*\$/, severity: "warning", description: "DNS resolution with dynamic input", category: "exfiltration" },
+
+  // ── CRYPTO WALLET EXFILTRATION ──
+  { regex: /['"`][13][a-km-zA-HJ-NP-Z1-9]{25,34}['"`]/, severity: "warning", description: "Hardcoded Bitcoin address — potential crypto exfiltration", category: "credential-theft" },
+  { regex: /['"`]0x[0-9a-fA-F]{40}['"`]/, severity: "warning", description: "Hardcoded Ethereum address — potential crypto exfiltration", category: "credential-theft" },
+  { regex: /(?:fetch|axios\.\w+|XMLHttpRequest)\s*\([^)]*(?:[13][a-km-zA-HJ-NP-Z1-9]{25,34}|0x[0-9a-fA-F]{40})/, severity: "warning", description: "Crypto wallet address sent via network request — exfiltration attempt", category: "credential-theft" },
 
   // ── CRYPTOCURRENCY MINING ──
   { regex: /stratum\+tcp:\/\/|stratum:\/\//, severity: "warning", description: "Cryptocurrency mining pool connection", category: "crypto-mining" },

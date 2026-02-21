@@ -636,4 +636,197 @@ export function registerTools(server: McpServer): void {
       }
     }
   );
+
+  // 12. AI-powered skill suggestions
+  server.tool(
+    "skillsmp_suggest",
+    "AI-powered skill recommendations based on what you already have installed. Optionally provide context about what you're working on to improve relevance. WARNING: Results contain untrusted third-party content.",
+    {
+      context: z.string().min(1).max(200).optional().describe("What you're working on (e.g. 'React testing', 'Python automation')"),
+      limit: z.number().min(1).max(20).default(5).describe("Max suggestions (default 5)"),
+    },
+    async ({ context, limit }) => {
+      try {
+        const installed = skillManager.getAllSkills();
+        const installedNames = new Set(installed.map((s) => s.name.toLowerCase()));
+
+        // Build search query from installed skill names + optional context
+        const nameParts = installed
+          .map((s) => s.name.replace(/[-_]/g, " "))
+          .slice(0, 10); // Cap to avoid overly long queries
+        const queryParts: string[] = [];
+        if (context) queryParts.push(sanitizeText(context));
+        if (nameParts.length > 0) queryParts.push(`similar to ${nameParts.join(", ")}`);
+
+        if (queryParts.length === 0) {
+          // No installed skills and no context — fall back to generic popular query
+          queryParts.push("popular useful Claude Code skills");
+        }
+
+        const query = queryParts.join(" — ").substring(0, 200);
+
+        // Request more than limit to account for filtering out already-installed
+        const fetchLimit = Math.min(limit + installed.length + 5, 50);
+        const result = await aiSearchSkills(query, fetchLimit);
+
+        // Filter out already-installed skills
+        const suggestions = result.skills
+          .filter((s) => !installedNames.has(sanitizeText(s.name).toLowerCase()))
+          .slice(0, limit);
+
+        if (suggestions.length === 0) {
+          const noResultMsg = installed.length > 0
+            ? `No new skill suggestions found based on your ${installed.length} installed skill(s)${context ? ` and context "${sanitizeText(context)}"` : ""}.`
+            : `No skill suggestions found${context ? ` for "${sanitizeText(context)}"` : ""}. Try providing a context parameter.`;
+          return { content: [{ type: "text", text: noResultMsg }] };
+        }
+
+        const formatted = suggestions.map((s, i) => formatAiSkill(s, i)).join("\n\n---\n\n");
+        const headerLines = [
+          `## Skill Suggestions`,
+          "",
+          `Based on ${installed.length > 0 ? `your ${installed.length} installed skill(s)` : "general recommendations"}${context ? ` and context: "${sanitizeText(context)}"` : ""}.`,
+          `**${suggestions.length}** suggestion(s)`,
+        ];
+        const header = headerLines.join("\n") + "\n";
+        return { content: [{ type: "text", text: header + UNTRUSTED_DISCLAIMER + "---\n\n" + formatted }] };
+      } catch (error) {
+        return { content: [{ type: "text", text: `Suggest failed: ${error instanceof Error ? error.message : "Unknown error"}` }], isError: true };
+      }
+    }
+  );
+
+  // 13. Side-by-side skill comparison
+  server.tool(
+    "skillsmp_compare",
+    "Side-by-side comparison of two skills including security scan results. Accepts GitHub URLs or installed skill names.",
+    {
+      skillA: z.string().min(1).max(200).describe("GitHub URL or installed skill name for first skill"),
+      skillB: z.string().min(1).max(200).describe("GitHub URL or installed skill name for second skill"),
+    },
+    async ({ skillA, skillB }) => {
+      try {
+        const resolveSkill = async (
+          input: string
+        ): Promise<{
+          name: string;
+          riskLevel: string;
+          filesCount: number;
+          hasSkillMd: boolean;
+          threatCount: number;
+          threatCategories: string[];
+          safe: boolean;
+          source: string;
+        }> => {
+          const sanitized = sanitizeText(input);
+
+          // Case 1: GitHub URL
+          if (input.startsWith("https://")) {
+            const scanResult = await fetchAndScanSkill(input);
+            // Derive a name from the URL
+            const urlParts = input.replace(/\/+$/, "").split("/");
+            const name = sanitizeText(urlParts[urlParts.length - 1] || "unknown");
+            const categories = [
+              ...new Set(scanResult.threats.map((t) => t.category)),
+            ];
+            return {
+              name,
+              riskLevel: scanResult.riskLevel,
+              filesCount: scanResult.filesScanned,
+              hasSkillMd: false, // Cannot determine from remote scan
+              threatCount: scanResult.threats.length,
+              threatCategories: categories,
+              safe: scanResult.safe,
+              source: sanitizeUrl(input),
+            };
+          }
+
+          // Case 2: Installed skill name
+          const local = skillManager.getSkill(input);
+          if (local) {
+            const categories = [
+              ...new Set(local.scanResult.threats.map((t) => t.category)),
+            ];
+            return {
+              name: local.name,
+              riskLevel: local.scanResult.riskLevel,
+              filesCount: local.filesCount,
+              hasSkillMd: local.hasSkillMd,
+              threatCount: local.scanResult.threats.length,
+              threatCategories: categories,
+              safe: local.scanResult.safe,
+              source: "installed locally",
+            };
+          }
+
+          // Case 3: Search marketplace by name
+          const searchResult = await searchSkills(input, 1);
+          if (searchResult.skills.length > 0 && searchResult.skills[0].githubUrl) {
+            const skill = searchResult.skills[0];
+            const scanResult = await fetchAndScanSkill(skill.githubUrl);
+            const categories = [
+              ...new Set(scanResult.threats.map((t) => t.category)),
+            ];
+            return {
+              name: sanitizeText(skill.name),
+              riskLevel: scanResult.riskLevel,
+              filesCount: scanResult.filesScanned,
+              hasSkillMd: false,
+              threatCount: scanResult.threats.length,
+              threatCategories: categories,
+              safe: scanResult.safe,
+              source: sanitizeUrl(skill.githubUrl),
+            };
+          }
+
+          throw new Error(`Could not find skill "${sanitized}". Provide a GitHub URL or an installed skill name.`);
+        };
+
+        const [a, b] = await Promise.all([resolveSkill(skillA), resolveSkill(skillB)]);
+
+        const riskEmoji: Record<string, string> = {
+          safe: "✅", low: "🟡", medium: "🟠", high: "🔴", critical: "🚫",
+        };
+
+        // Build recommendation
+        const recommendSkill = (
+          s: typeof a
+        ): string => {
+          if (!s.safe) return "Not recommended";
+          if (s.riskLevel === "safe") return "Safe to use";
+          return "Use with caution";
+        };
+
+        const lines = [
+          `## Skill Comparison`,
+          "",
+          `| Property | ${a.name} | ${b.name} |`,
+          `|----------|---------|---------|`,
+          `| **Source** | ${a.source} | ${b.source} |`,
+          `| **Risk Level** | ${riskEmoji[a.riskLevel] || ""} ${a.riskLevel.toUpperCase()} | ${riskEmoji[b.riskLevel] || ""} ${b.riskLevel.toUpperCase()} |`,
+          `| **Files** | ${a.filesCount} | ${b.filesCount} |`,
+          `| **Threats** | ${a.threatCount} | ${b.threatCount} |`,
+          `| **Threat Categories** | ${a.threatCategories.join(", ") || "None"} | ${b.threatCategories.join(", ") || "None"} |`,
+          `| **SKILL.md** | ${a.hasSkillMd ? "Yes" : "No / Unknown"} | ${b.hasSkillMd ? "Yes" : "No / Unknown"} |`,
+          `| **Safe** | ${a.safe ? "Yes" : "No"} | ${b.safe ? "Yes" : "No"} |`,
+          `| **Recommendation** | ${recommendSkill(a)} | ${recommendSkill(b)} |`,
+        ];
+
+        // Summary
+        if (a.riskLevel === b.riskLevel) {
+          lines.push("", `Both skills have the same risk level (**${a.riskLevel.toUpperCase()}**).`);
+        } else {
+          const RISK_ORDER: Record<string, number> = { safe: 0, low: 1, medium: 2, high: 3, critical: 4 };
+          const safer = (RISK_ORDER[a.riskLevel] ?? 5) <= (RISK_ORDER[b.riskLevel] ?? 5) ? a : b;
+          lines.push("", `**${safer.name}** has a lower risk level and may be the safer choice.`);
+        }
+
+        lines.push("", "---", "**Note**: Comparison is based on point-in-time scans. Repository contents may change.");
+
+        return { content: [{ type: "text", text: lines.join("\n") }] };
+      } catch (error) {
+        return { content: [{ type: "text", text: `Compare failed: ${error instanceof Error ? error.message : "Unknown error"}` }], isError: true };
+      }
+    }
+  );
 }

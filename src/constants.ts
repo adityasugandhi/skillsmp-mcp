@@ -45,9 +45,11 @@ export const TEXT_EXTENSIONS = new Set([
   "", // extensionless files
 ]);
 
-// ─── Sanitization ────────────────────────────────────────────────────────────
+// ─── Scan Cache ─────────────────────────────────────────────────────────────
 
-/** Characters/patterns that could be used for markdown injection in tool output */
+export const SCAN_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
+export const SCAN_CACHE_MAX_ENTRIES = 100;
+
 // ─── Watcher ────────────────────────────────────────────────────────────────
 
 export const WATCH_DEBOUNCE_MS = 500;
