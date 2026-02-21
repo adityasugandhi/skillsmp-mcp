@@ -25,9 +25,60 @@ An MCP (Model Context Protocol) server for [SkillsMP](https://skillsmp.com) — 
 
 ## Install
 
-### Claude Code (recommended)
+Works with **any MCP-compatible client** — Claude Code, OpenClaw, Cursor, Windsurf, nanobot, and more.
 
-Add to your Claude Code MCP settings (`~/.claude/settings.json`):
+### Claude Code
+
+Add to `~/.claude/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "skillsmp": {
+      "command": "npx",
+      "args": ["-y", "skillsmp-mcp"]
+    }
+  }
+}
+```
+
+### OpenClaw
+
+Add to `~/.openclaw/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "skillsmp": {
+      "version": "1.0.0",
+      "autoUpdate": false,
+      "command": "npx",
+      "args": ["-y", "skillsmp-mcp@1.0.0"]
+    }
+  }
+}
+```
+
+> OpenClaw uses the same `SKILL.md` format as Claude Code. Skills installed via this server are compatible with both platforms. OpenClaw users should pin versions and review tool policies per the [security hardening guide](https://aimaker.substack.com/p/openclaw-security-hardening-guide).
+
+### Cursor
+
+Add to `.cursor/mcp.json` in your project root:
+
+```json
+{
+  "mcpServers": {
+    "skillsmp": {
+      "command": "npx",
+      "args": ["-y", "skillsmp-mcp"]
+    }
+  }
+}
+```
+
+### Windsurf
+
+Add to `~/.windsurf/mcp.json`:
 
 ```json
 {
@@ -46,7 +97,7 @@ Add to your Claude Code MCP settings (`~/.claude/settings.json`):
 npm install -g skillsmp-mcp
 ```
 
-Then add to your MCP config:
+Then reference in any MCP config:
 
 ```json
 {
@@ -57,6 +108,16 @@ Then add to your MCP config:
   }
 }
 ```
+
+### Client Compatibility
+
+| Client | Config Path | Skill Format |
+|--------|------------|--------------|
+| Claude Code | `~/.claude/settings.json` | `SKILL.md` in `~/.claude/skills/` |
+| OpenClaw | `~/.openclaw/mcp.json` | `SKILL.md` (same format, ClawHub registry) |
+| Cursor | `.cursor/mcp.json` | MCP tools only |
+| Windsurf | `~/.windsurf/mcp.json` | MCP tools only |
+| nanobot | MCP config | MCP tools only |
 
 ## Security Model
 
@@ -90,7 +151,7 @@ Search SkillsMP → Pick a skill → Security scan (60+ patterns)
                                         ↓
                               npm install --ignore-scripts (if needed)
                                         ↓
-                              Restart Claude Code to load
+                              Restart your MCP client to load
 ```
 
 ## Examples
@@ -126,7 +187,11 @@ npm run dev    # Watch mode with tsx
 ## Requirements
 
 - Node.js >= 20
-- Claude Code or any MCP-compatible client
+- Any MCP-compatible client (Claude Code, OpenClaw, Cursor, Windsurf, nanobot, etc.)
+
+## Author
+
+**Aditya Sugandhi** — [adityasugandhi.com](https://adityasugandhi.com) | [GitHub](https://github.com/adityasugandhi)
 
 ## License
 
