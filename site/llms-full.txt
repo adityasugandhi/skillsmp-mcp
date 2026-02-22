@@ -16,7 +16,7 @@ The key differentiator: SkillSync is the only tool that gates every skill instal
 - **Author**: Aditya Sugandhi (https://adityasugandhi.com)
 - **npm**: https://www.npmjs.com/package/@stranzwersweb2/skillsync-mcp
 - **GitHub**: https://github.com/adityasugandhi/skillsync-mcp
-- **Website**: https://adityasugandhi.github.io/skillsync-mcp/
+- **Website**: https://skillsync.js.org/
 - **Node.js**: Requires >= 20
 - **Transport**: MCP over stdio (StdioServerTransport)
 - **Dependencies**: @modelcontextprotocol/sdk, zod

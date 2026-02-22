@@ -11,7 +11,7 @@ SkillSync MCP (`@stranzwersweb2/skillsync-mcp`) is an open-source Model Context 
 - **Author**: Aditya Sugandhi
 - **npm**: https://www.npmjs.com/package/@stranzwersweb2/skillsync-mcp
 - **GitHub**: https://github.com/adityasugandhi/skillsync-mcp
-- **Website**: https://adityasugandhi.github.io/skillsync-mcp/
+- **Website**: https://skillsync.js.org/
 
 ## Install
 

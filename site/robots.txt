@@ -1,11 +1,11 @@
-# SkillSync MCP — https://adityasugandhi.github.io/skillsync-mcp/
+# SkillSync MCP — https://skillsync.js.org/
 
 # Allow all crawlers
 User-agent: *
 Allow: /
 
 # Search engine sitemaps
-Sitemap: https://adityasugandhi.github.io/skillsync-mcp/sitemap.xml
+Sitemap: https://skillsync.js.org/sitemap.xml
 
 # AI and LLM crawlers — welcome
 User-agent: GPTBot
