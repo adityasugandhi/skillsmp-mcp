@@ -1,0 +1,167 @@
+{
+  "serverInfo": {
+    "name": "skillsync",
+    "version": "1.3.0",
+    "description": "Security-gated skill management for Claude Code. Search, scan, install & manage skills with 60+ threat detection patterns."
+  },
+  "authentication": {
+    "required": false
+  },
+  "tools": [
+    {
+      "name": "skillsmp_search",
+      "description": "Search SkillsMP marketplace for skills by keyword. Returns names, descriptions, authors, and GitHub links.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": { "type": "string", "description": "Search keyword(s)", "minLength": 1, "maxLength": 200 },
+          "limit": { "type": "number", "description": "Max results (default 20)", "minimum": 1, "maximum": 100, "default": 20 },
+          "sortBy": { "type": "string", "enum": ["stars", "recent"], "default": "recent", "description": "Sort order" }
+        },
+        "required": ["query"]
+      }
+    },
+    {
+      "name": "skillsmp_ai_search",
+      "description": "AI-powered semantic search on SkillsMP. Uses Cloudflare AI for relevance matching.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": { "type": "string", "description": "Natural language search query", "minLength": 1, "maxLength": 200 },
+          "limit": { "type": "number", "description": "Max results (default 10)", "minimum": 1, "maximum": 50, "default": 10 }
+        },
+        "required": ["query"]
+      }
+    },
+    {
+      "name": "skillsmp_scan_skill",
+      "description": "Scan a skill's GitHub source for security threats: prompt injection, reverse shells, credential theft, supply chain attacks, crypto mining, and 60+ other patterns.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "githubUrl": { "type": "string", "format": "uri", "description": "GitHub URL (https://github.com/user/repo/tree/branch/path)" }
+        },
+        "required": ["githubUrl"]
+      }
+    },
+    {
+      "name": "skillsmp_search_safe",
+      "description": "Search SkillsMP and auto-scan top results for security threats. Combines keyword search with vulnerability scanning.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": { "type": "string", "description": "Search keyword(s)", "minLength": 1, "maxLength": 200 },
+          "limit": { "type": "number", "description": "Max search results (default 10)", "minimum": 1, "maximum": 20, "default": 10 },
+          "scanTop": { "type": "number", "description": "How many top results to security-scan (default 3)", "minimum": 1, "maximum": 5, "default": 3 },
+          "sortBy": { "type": "string", "enum": ["stars", "recent"], "default": "recent", "description": "Sort order" }
+        },
+        "required": ["query"]
+      }
+    },
+    {
+      "name": "skillsmp_install_skill",
+      "description": "Security-scan a skill from GitHub, then install it to ~/.claude/skills/. Blocks on critical threats. Requires force=true for medium/high risk.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "githubUrl": { "type": "string", "format": "uri", "description": "GitHub URL" },
+          "name": { "type": "string", "description": "Skill name (inferred from URL if omitted)", "minLength": 1, "maxLength": 64 },
+          "force": { "type": "boolean", "default": false, "description": "Force install: skip medium/high risk block, overwrite existing" }
+        },
+        "required": ["githubUrl"]
+      }
+    },
+    {
+      "name": "skillsmp_uninstall_skill",
+      "description": "Remove an installed skill from ~/.claude/skills/ by name.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "description": "Name of the skill directory to remove", "minLength": 1, "maxLength": 64 }
+        },
+        "required": ["name"]
+      }
+    },
+    {
+      "name": "skillsmp_list_installed",
+      "description": "List all installed skills with security status and risk levels from last scan.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "refresh": { "type": "boolean", "default": false, "description": "Force re-sync before listing (re-scans all skills)" }
+        }
+      }
+    },
+    {
+      "name": "skillsmp_audit_installed",
+      "description": "Deep security audit of a specific installed skill. Forces a fresh scan and returns a detailed threat report.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "description": "Name of the installed skill to audit", "minLength": 1, "maxLength": 64 }
+        },
+        "required": ["name"]
+      }
+    },
+    {
+      "name": "skillsmp_suggest",
+      "description": "AI-powered skill recommendations based on installed skills. Optionally provide context about your current project.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "context": { "type": "string", "description": "What you're working on (e.g. 'React testing', 'Python automation')", "minLength": 1, "maxLength": 200 },
+          "limit": { "type": "number", "description": "Max suggestions (default 5)", "minimum": 1, "maximum": 20, "default": 5 }
+        }
+      }
+    },
+    {
+      "name": "skillsmp_compare",
+      "description": "Side-by-side comparison of two skills including security scan results. Accepts GitHub URLs or installed skill names.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "skillA": { "type": "string", "description": "GitHub URL or installed skill name for first skill", "minLength": 1, "maxLength": 200 },
+          "skillB": { "type": "string", "description": "GitHub URL or installed skill name for second skill", "minLength": 1, "maxLength": 200 }
+        },
+        "required": ["skillA", "skillB"]
+      }
+    },
+    {
+      "name": "skillsync_configure",
+      "description": "Manage sync subscriptions and settings. Add/remove search subscriptions, configure sync interval, risk threshold, and conflict policy.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "action": { "type": "string", "enum": ["add", "remove", "list", "set"], "description": "Action to perform" },
+          "query": { "type": "string", "description": "Search query for new subscription (action=add)" },
+          "subscriptionId": { "type": "string", "description": "Subscription ID to remove (action=remove)" },
+          "syncIntervalHours": { "type": "number", "description": "Sync interval in hours, 0=manual only (action=set)", "minimum": 0, "maximum": 168 },
+          "maxRiskLevel": { "type": "string", "enum": ["safe", "low", "medium"], "description": "Max risk level for auto-install (action=set)" },
+          "conflictPolicy": { "type": "string", "enum": ["skip", "overwrite", "unmanage"], "description": "How to handle locally modified skills (action=set)" },
+          "enabled": { "type": "boolean", "description": "Enable/disable sync engine (action=set)" }
+        },
+        "required": ["action"]
+      }
+    },
+    {
+      "name": "skillsync_sync_now",
+      "description": "Run a sync cycle: poll subscriptions, diff against installed skills, install/update/remove. Use dryRun=true to preview.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "dryRun": { "type": "boolean", "default": false, "description": "Preview changes without executing" }
+        }
+      }
+    },
+    {
+      "name": "skillsync_status",
+      "description": "Show sync engine status: managed vs manual skills, subscriptions, last sync time, next scheduled sync.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      }
+    }
+  ],
+  "resources": [],
+  "prompts": []
+}

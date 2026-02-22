@@ -48,3 +48,16 @@ main().catch((error) => {
   console.error("[skillsync] Fatal error:", error);
   process.exit(1);
 });
+
+/**
+ * Smithery sandbox server for capability scanning.
+ * Returns a configured McpServer without connecting transport.
+ */
+export function createSandboxServer() {
+  const sandboxServer = new McpServer({
+    name: "skillsync",
+    version: "1.3.0",
+  });
+  registerTools(sandboxServer);
+  return sandboxServer;
+}
