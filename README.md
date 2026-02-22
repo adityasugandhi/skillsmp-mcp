@@ -1,10 +1,13 @@
 # SkillSync MCP
 
 [![npm version](https://img.shields.io/npm/v/@stranzwersweb2/skillsync-mcp)](https://www.npmjs.com/package/@stranzwersweb2/skillsync-mcp)
+[![Smithery](https://smithery.ai/badge/adityasugandhi/skillsync-mcp)](https://smithery.ai/servers/adityasugandhi/skillsync-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-green.svg)](https://modelcontextprotocol.io)
 [![Node.js >= 20](https://img.shields.io/badge/Node.js-%3E%3D20-brightgreen.svg)](https://nodejs.org)
 [![Security Patterns](https://img.shields.io/badge/Threat_Patterns-60%2B-red.svg)](#security-model)
+
+**[Website](https://skillsync.js.org)** | **[Smithery](https://smithery.ai/servers/adityasugandhi/skillsync-mcp)** | **[npm](https://www.npmjs.com/package/@stranzwersweb2/skillsync-mcp)** | **[GitHub](https://github.com/adityasugandhi/skillsync-mcp)**
 
 An MCP (Model Context Protocol) server for [SkillsMP](https://skillsmp.com) -- the marketplace for Claude Code skills. Search, scan for security threats, install, and manage skills directly from your AI assistant.
 
@@ -32,7 +35,7 @@ An MCP (Model Context Protocol) server for [SkillsMP](https://skillsmp.com) -- t
 | Startup verification | No | No | Yes -- fs.watch + content hash |
 | Output sanitization | No | No | Yes -- anti prompt injection |
 
-## Tools (8)
+## Tools (13)
 
 | Tool | Description |
 |------|-------------|
@@ -44,12 +47,23 @@ An MCP (Model Context Protocol) server for [SkillsMP](https://skillsmp.com) -- t
 | `skillsmp_uninstall_skill` | Remove an installed skill |
 | `skillsmp_list_installed` | List all installed skills with risk levels (optional refresh) |
 | `skillsmp_audit_installed` | Deep security audit of a specific installed skill |
+| `skillsmp_suggest` | AI-powered skill recommendations based on installed skills |
+| `skillsmp_compare` | Side-by-side security comparison of two skills |
+| `skillsync_configure` | Manage sync subscriptions and settings |
+| `skillsync_sync_now` | Run sync cycle: poll, diff, install/update/remove |
+| `skillsync_status` | Show sync engine status and schedule |
 
 ## Compatible With
 
 > Works with **Claude Code** | **OpenClaw** | **Cursor** | **Windsurf** | **GitHub Copilot** | **Zed** | **nanobot** -- any MCP-compatible client
 
 ## Install
+
+### Smithery (one-click)
+
+[![Smithery](https://smithery.ai/badge/adityasugandhi/skillsync-mcp)](https://smithery.ai/servers/adityasugandhi/skillsync-mcp)
+
+Install via [Smithery](https://smithery.ai/servers/adityasugandhi/skillsync-mcp) for automatic configuration with any supported client.
 
 ### Claude Code
 
