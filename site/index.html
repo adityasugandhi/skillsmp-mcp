@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SkillSync MCP &mdash; Security-Gated Skill Management for Claude Code</title>
+  <meta name="description" content="The only MCP server that gates skill installation behind a full security scan. 60+ threat patterns, 13 tools, 7 supported clients. Search, scan, install, and sync Claude Code skills securely.">
+  <meta name="keywords" content="MCP, Model Context Protocol, Claude Code, skills, security scanner, prompt injection, AI tools, OpenClaw, Cursor, Windsurf, GitHub Copilot, Zed, nanobot">
+  <meta name="author" content="Aditya Sugandhi">
+  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
+  <link rel="canonical" href="https://adityasugandhi.github.io/skillsync-mcp/">
+
+  <!-- AI / LLM discovery -->
+  <link rel="alternate" type="text/plain" href="llms.txt" title="LLM-friendly site summary">
+  <link rel="alternate" type="text/plain" href="llms-full.txt" title="LLM-friendly full reference">
+  <meta name="ai-content-declaration" content="This page describes SkillSync MCP, a security-gated skill management MCP server for Claude Code with 60+ threat patterns, 13 tools, and 7 supported clients.">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="SkillSync MCP &mdash; Security-Gated Skill Management for Claude Code">
+  <meta property="og:description" content="The only MCP server that gates skill installation behind a full security scan. 60+ threat patterns, 13 tools, 7 clients.">
+  <meta property="og:url" content="https://adityasugandhi.github.io/skillsync-mcp/">
+  <meta property="og:site_name" content="SkillSync MCP">
+  <meta property="og:locale" content="en_US">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="SkillSync MCP &mdash; Security-Gated Skill Management for Claude Code">
+  <meta name="twitter:description" content="The only MCP server that gates skill installation behind a full security scan. 60+ threat patterns, 13 tools, 7 clients.">
+  <meta name="twitter:creator" content="@adityasugandhi">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+
+  <!-- Theme init (flash-free) -->
+  <script>
+    (function(){
+      var s=localStorage.getItem('theme');
+      var p=window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light';
+      document.documentElement.setAttribute('data-theme',s||p);
+    })();
+  </script>
+
+  <!-- Anthropic-themed styles -->
+  <link rel="stylesheet" href="style.css">
+
+  <!-- JSON-LD Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "SkillSync MCP",
+    "alternateName": "@stranzwersweb2/skillsync-mcp",
+    "description": "An MCP server for security-gated skill management. Search, scan, install, and manage Claude Code skills with 60+ threat detection patterns.",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "Cross-platform (Node.js 20+)",
+    "softwareVersion": "1.3.0",
+    "author": {
+      "@type": "Person",
+      "name": "Aditya Sugandhi",
+      "url": "https://adityasugandhi.com"
+    },
+    "license": "https://opensource.org/licenses/MIT",
+    "url": "https://adityasugandhi.github.io/skillsync-mcp/",
+    "downloadUrl": "https://www.npmjs.com/package/@stranzwersweb2/skillsync-mcp",
+    "codeRepository": "https://github.com/adityasugandhi/skillsync-mcp",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "featureList": [
+      "60+ security threat patterns",
+      "Prompt injection detection",
+      "Reverse shell detection",
+      "Credential theft prevention",
+      "Supply chain attack detection",
+      "SSRF prevention",
+      "Content hashing and TOCTOU verification",
+      "Cloud sync with subscriptions",
+      "AI-powered semantic search",
+      "7 supported MCP clients"
+    ]
+  }
+  </script>
+</head>
+<body>
+
+<!-- ─── Top Nav ──────────────────────────────────────────────────────────── -->
+<nav class="topnav">
+  <a href="#" class="brand"><strong>SkillSync MCP</strong></a>
+  <input type="checkbox" id="nav-toggle">
+  <label for="nav-toggle" class="nav-hamburger" aria-label="Toggle navigation">&#9776;</label>
+  <ul>
+    <li><a href="#features">Features</a></li>
+    <li><a href="#tools">Tools</a></li>
+    <li><a href="#install">Install</a></li>
+    <li><a href="#security">Security</a></li>
+    <li><a href="https://github.com/adityasugandhi/skillsync-mcp" target="_blank" rel="noopener">GitHub</a></li>
+    <li><button class="theme-btn" id="theme-toggle" aria-label="Toggle dark mode">Dark</button></li>
+  </ul>
+</nav>
+
+<main>
+
+<!-- ─── Hero ─────────────────────────────────────────────────────────────── -->
+<section class="hero" id="hero">
+  <div class="container">
+    <h1>Security-Gated Skill Management for AI Coding Assistants</h1>
+    <p class="hero-subtitle"><strong>The only tool that gates skill installation behind a full security scan.</strong></p>
+    <p class="hero-stats">60+ threat patterns &middot; 13 MCP tools &middot; 7 supported clients</p>
+
+    <div class="hero-install">
+      <pre><code id="install-cmd">npx -y @stranzwersweb2/skillsync-mcp</code></pre>
+      <button class="copy-btn" id="copy-btn" aria-label="Copy install command">Copy</button>
+    </div>
+
+    <div class="hero-cta">
+      <a href="https://www.npmjs.com/package/@stranzwersweb2/skillsync-mcp" class="btn btn-primary" target="_blank" rel="noopener">npm</a>
+      <a href="https://github.com/adityasugandhi/skillsync-mcp" class="btn btn-outline" target="_blank" rel="noopener">GitHub</a>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Supported Clients ────────────────────────────────────────────────── -->
+<section class="clients" id="clients">
+  <div class="container">
+    <h2>Works With Any MCP Client</h2>
+    <div class="badge-row">
+      <span class="badge">Claude Code</span>
+      <span class="badge">OpenClaw</span>
+      <span class="badge">Cursor</span>
+      <span class="badge">Windsurf</span>
+      <span class="badge">GitHub Copilot</span>
+      <span class="badge">Zed</span>
+      <span class="badge">nanobot</span>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Why SkillSync ────────────────────────────────────────────────────── -->
+<section id="why">
+  <div class="container">
+    <h2>Why SkillSync?</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Capability</th>
+            <th>Raw git clone</th>
+            <th>Other Tools</th>
+            <th class="highlight-col">SkillSync MCP</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Security scan before install</td>
+            <td>No</td>
+            <td>No</td>
+            <td class="highlight-col"><span class="badge badge-success">Yes &mdash; 60+ patterns</span></td>
+          </tr>
+          <tr>
+            <td>Blocks critical threats</td>
+            <td>No</td>
+            <td>No</td>
+            <td class="highlight-col"><span class="badge badge-success">Prompt injection, RCE, credential theft</span></td>
+          </tr>
+          <tr>
+            <td>Multi-client support</td>
+            <td>N/A</td>
+            <td>Varies</td>
+            <td class="highlight-col"><span class="badge badge-success">7 clients</span></td>
+          </tr>
+          <tr>
+            <td>Marketplace search</td>
+            <td>Manual</td>
+            <td>Some</td>
+            <td class="highlight-col"><span class="badge badge-success">Keyword + AI semantic</span></td>
+          </tr>
+          <tr>
+            <td>Cloud sync</td>
+            <td>No</td>
+            <td>No</td>
+            <td class="highlight-col"><span class="badge badge-success">Subscription-based sync</span></td>
+          </tr>
+          <tr>
+            <td>Startup verification</td>
+            <td>No</td>
+            <td>No</td>
+            <td class="highlight-col"><span class="badge badge-success">fs.watch + content hash</span></td>
+          </tr>
+          <tr>
+            <td>Output sanitization</td>
+            <td>No</td>
+            <td>No</td>
+            <td class="highlight-col"><span class="badge badge-success">Anti prompt injection</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Features ─────────────────────────────────────────────────────────── -->
+<section id="features">
+  <div class="container">
+    <h2>Features</h2>
+    <div class="grid grid-2">
+      <article class="card">
+        <h3>Security Scanning</h3>
+        <p>60+ threat patterns across 15 categories: prompt injection, Unicode homoglyphs, reverse shells, credential theft, supply chain attacks, crypto mining, RCE, obfuscation, privilege escalation, and more. Critical threats are permanently blocked.</p>
+      </article>
+      <article class="card">
+        <h3>Cloud Sync</h3>
+        <p>Subscribe to search queries and auto-sync skills across machines. Configurable risk thresholds, conflict policies, and dry-run previews. Managed vs manual skill tracking with lock files.</p>
+      </article>
+      <article class="card">
+        <h3>AI-Powered Search</h3>
+        <p>Keyword and semantic search across the SkillsMP marketplace powered by Cloudflare AI. Smart suggestions based on your installed skills. Side-by-side skill comparison with security diffs.</p>
+      </article>
+      <article class="card">
+        <h3>Skill Management</h3>
+        <p>Install, uninstall, list, and audit skills. Startup verification with fs.watch and SHA-256 content hashing. TOCTOU protection. npm install with --ignore-scripts for supply chain safety.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ─── 13 MCP Tools ─────────────────────────────────────────────────────── -->
+<section id="tools">
+  <div class="container">
+    <h2>13 MCP Tools</h2>
+
+    <h3>Search &amp; Discovery</h3>
+    <details name="tools">
+      <summary><code>skillsmp_search</code> &mdash; Keyword Search</summary>
+      <p>Search the SkillsMP marketplace by keyword. Returns skill names, descriptions, authors, star counts, and GitHub links. Supports sorting by stars or recency. All results are sanitized against prompt injection.</p>
+    </details>
+    <details name="tools">
+      <summary><code>skillsmp_ai_search</code> &mdash; AI Semantic Search</summary>
+      <p>Natural language search powered by Cloudflare AI. Returns relevance-scored results. Finds skills even when keywords do not exactly match.</p>
+    </details>
+    <details name="tools">
+      <summary><code>skillsmp_search_safe</code> &mdash; Search + Auto-Scan</summary>
+      <p>Combines keyword search with automatic security scanning of the top N results. Shows risk levels and threat summaries inline with search results.</p>
+    </details>
+    <details name="tools">
+      <summary><code>skillsmp_suggest</code> &mdash; AI Suggestions</summary>
+      <p>Recommends new skills based on what you already have installed and optional context about your current project. Filters out already-installed skills automatically.</p>
+    </details>
+
+    <h3>Security</h3>
+    <details name="tools">
+      <summary><code>skillsmp_scan_skill</code> &mdash; Security Scan</summary>
+      <p>Scans a GitHub skill repository for 60+ threat patterns across prompt injection, reverse shells, credential theft, supply chain attacks, crypto mining, and more. Returns a risk level, threat list, content hash, and recommendation.</p>
+    </details>
+    <details name="tools">
+      <summary><code>skillsmp_compare</code> &mdash; Side-by-Side Compare</summary>
+      <p>Compare two skills by GitHub URL or installed name. Shows risk levels, threat counts, categories, and a recommendation for which is safer.</p>
+    </details>
+    <details name="tools">
+      <summary><code>skillsmp_audit_installed</code> &mdash; Deep Audit</summary>
+      <p>Forces a fresh security scan on a specific installed skill. Shows detailed threat report, file count, total size, content hash, and SKILL.md status.</p>
+    </details>
+
+    <h3>Skill Management</h3>
+    <details name="tools">
+      <summary><code>skillsmp_install_skill</code> &mdash; Install</summary>
+      <p>Scans a GitHub skill, then installs it to <code>~/.claude/skills/</code>. Critical threats are permanently blocked. Medium/high risk requires <code>force=true</code>. Runs npm install with <code>--ignore-scripts</code>.</p>
+    </details>
+    <details name="tools">
+      <summary><code>skillsmp_uninstall_skill</code> &mdash; Uninstall</summary>
+      <p>Removes an installed skill directory and updates the in-memory registry. Restart your MCP client to apply changes.</p>
+    </details>
+    <details name="tools">
+      <summary><code>skillsmp_list_installed</code> &mdash; List Installed</summary>
+      <p>Lists all installed skills with risk levels, file counts, SKILL.md status, and last scan timestamps. Supports forced refresh and re-sync.</p>
+    </details>
+
+    <h3>Cloud Sync</h3>
+    <details name="tools">
+      <summary><code>skillsync_configure</code> &mdash; Configure Sync</summary>
+      <p>Manage sync subscriptions and settings. Add or remove search subscriptions, set sync interval, risk threshold, and conflict policy (skip, overwrite, or unmanage).</p>
+    </details>
+    <details name="tools">
+      <summary><code>skillsync_sync_now</code> &mdash; Run Sync</summary>
+      <p>Polls subscriptions, diffs against installed skills, and installs/updates/removes as needed. Supports <code>dryRun=true</code> to preview changes before applying.</p>
+    </details>
+    <details name="tools">
+      <summary><code>skillsync_status</code> &mdash; Sync Status</summary>
+      <p>Shows sync engine state: managed vs manual skills, subscription count, last sync time, next scheduled sync, and per-skill details.</p>
+    </details>
+  </div>
+</section>
+
+<!-- ─── Quick Start ──────────────────────────────────────────────────────── -->
+<section id="install">
+  <div class="container">
+    <h2>Quick Start</h2>
+    <p>Add SkillSync to your MCP client configuration:</p>
+
+    <details name="install" open>
+      <summary>Claude Code</summary>
+      <p>Add to <code>~/.claude/settings.json</code>:</p>
+      <pre><code>{
+  "mcpServers": {
+    "skillsmp": {
+      "command": "npx",
+      "args": ["-y", "@stranzwersweb2/skillsync-mcp"]
+    }
+  }
+}</code></pre>
+    </details>
+
+    <details name="install">
+      <summary>OpenClaw</summary>
+      <p>Add to <code>~/.openclaw/mcp.json</code>:</p>
+      <pre><code>{
+  "mcpServers": {
+    "skillsmp": {
+      "version": "1.3.0",
+      "autoUpdate": false,
+      "command": "npx",
+      "args": ["-y", "@stranzwersweb2/skillsync-mcp@1.3.0"]
+    }
+  }
+}</code></pre>
+      <p><small>OpenClaw uses the same SKILL.md format as Claude Code. Pin versions and review tool policies per the security hardening guide.</small></p>
+    </details>
+
+    <details name="install">
+      <summary>Cursor</summary>
+      <p>Add to <code>.cursor/mcp.json</code> in your project root:</p>
+      <pre><code>{
+  "mcpServers": {
+    "skillsmp": {
+      "command": "npx",
+      "args": ["-y", "@stranzwersweb2/skillsync-mcp"]
+    }
+  }
+}</code></pre>
+    </details>
+
+    <details name="install">
+      <summary>Windsurf</summary>
+      <p>Add to <code>~/.windsurf/mcp.json</code>:</p>
+      <pre><code>{
+  "mcpServers": {
+    "skillsmp": {
+      "command": "npx",
+      "args": ["-y", "@stranzwersweb2/skillsync-mcp"]
+    }
+  }
+}</code></pre>
+    </details>
+
+    <details name="install">
+      <summary>GitHub Copilot</summary>
+      <p>Add to <code>.github/copilot-mcp.json</code> in your project root, or <code>~/.github/copilot-mcp.json</code> for global:</p>
+      <pre><code>{
+  "mcpServers": {
+    "skillsync": {
+      "command": "npx",
+      "args": ["-y", "@stranzwersweb2/skillsync-mcp"],
+      "env": {
+        "SKILLSMP_API_KEY": "your-api-key"
+      }
+    }
+  }
+}</code></pre>
+    </details>
+
+    <details name="install">
+      <summary>Zed</summary>
+      <p>Add to <code>~/.config/zed/settings.json</code> under <code>"context_servers"</code>:</p>
+      <pre><code>{
+  "context_servers": {
+    "skillsync": {
+      "command": {
+        "path": "npx",
+        "args": ["-y", "@stranzwersweb2/skillsync-mcp"],
+        "env": {
+          "SKILLSMP_API_KEY": "your-api-key"
+        }
+      }
+    }
+  }
+}</code></pre>
+    </details>
+
+    <details name="install">
+      <summary>Global Install (npm)</summary>
+      <pre><code>npm install -g @stranzwersweb2/skillsync-mcp</code></pre>
+      <p>Then reference <code>skillsync-mcp</code> as the command in any MCP config:</p>
+      <pre><code>{
+  "mcpServers": {
+    "skillsmp": {
+      "command": "skillsync-mcp"
+    }
+  }
+}</code></pre>
+    </details>
+
+    <h3>Client Compatibility</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Client</th>
+            <th>Config Path</th>
+            <th>Skill Format</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Claude Code</td><td><code>~/.claude/settings.json</code></td><td>SKILL.md in <code>~/.claude/skills/</code></td></tr>
+          <tr><td>OpenClaw</td><td><code>~/.openclaw/mcp.json</code></td><td>SKILL.md (same format)</td></tr>
+          <tr><td>Cursor</td><td><code>.cursor/mcp.json</code></td><td>MCP tools only</td></tr>
+          <tr><td>Windsurf</td><td><code>~/.windsurf/mcp.json</code></td><td>MCP tools only</td></tr>
+          <tr><td>GitHub Copilot</td><td><code>.github/copilot-mcp.json</code></td><td>MCP tools only</td></tr>
+          <tr><td>Zed</td><td><code>~/.config/zed/settings.json</code></td><td>MCP tools only</td></tr>
+          <tr><td>nanobot</td><td>MCP config</td><td>MCP tools only</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Security Deep Dive ───────────────────────────────────────────────── -->
+<section id="security">
+  <div class="container">
+    <h2>Security Model</h2>
+    <p>Every installation is gated by a multi-level security scan.</p>
+
+    <h3>Risk Levels</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Level</th><th>Behavior</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><span class="badge badge-success">Safe / Low</span></td><td>Install proceeds with warnings shown</td></tr>
+          <tr><td><span class="badge badge-warning">Medium / High</span></td><td>Blocked &mdash; requires <code>force=true</code> to override</td></tr>
+          <tr><td><span class="badge badge-danger">Critical</span></td><td>Permanently blocked &mdash; no override possible</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>15 Threat Categories</h3>
+    <div class="badge-row badge-row-wrap">
+      <span class="badge badge-danger">Prompt Injection</span>
+      <span class="badge badge-danger">Unicode Homoglyphs</span>
+      <span class="badge badge-danger">Destructive Shell</span>
+      <span class="badge badge-danger">Remote Code Execution</span>
+      <span class="badge badge-danger">Reverse Shells</span>
+      <span class="badge badge-danger">Credential Theft</span>
+      <span class="badge badge-danger">Supply Chain</span>
+      <span class="badge badge-danger">Privilege Escalation</span>
+      <span class="badge badge-danger">Exfiltration</span>
+      <span class="badge badge-warning">Obfuscation</span>
+      <span class="badge badge-warning">Code Execution</span>
+      <span class="badge badge-warning">Shell Execution</span>
+      <span class="badge badge-warning">Network</span>
+      <span class="badge badge-warning">Crypto Mining</span>
+      <span class="badge badge-warning">Dotfile Poisoning</span>
+    </div>
+
+    <h3>Scanner Flow</h3>
+    <ol>
+      <li>Fetch skill source from GitHub (SSRF-gated: only <code>github.com</code> accepted)</li>
+      <li>Validate file count (&le; 50) and total size (&le; 2MB)</li>
+      <li>Skip binary files, flag suspicious filenames (<code>postinstall.sh</code>, <code>.env</code>, etc.)</li>
+      <li>Scan each text file line-by-line against 60+ regex patterns</li>
+      <li>Run multi-line patterns against full file content</li>
+      <li>Skip lines over 2000 chars (ReDoS protection)</li>
+      <li>Compute SHA-256 content hash for TOCTOU verification</li>
+      <li>Assign risk level: safe &rarr; low &rarr; medium &rarr; high &rarr; critical</li>
+      <li>Gate installation based on risk level</li>
+    </ol>
+
+    <h3>Additional Safety Guards</h3>
+    <ul>
+      <li>Path traversal prevention on skill names and filenames</li>
+      <li>SSRF prevention &mdash; only <code>github.com</code> URLs accepted</li>
+      <li><code>npm install --ignore-scripts</code> blocks postinstall attacks</li>
+      <li>Max 50 files, 512KB per file, 2MB total size limit</li>
+      <li>Content hash for TOCTOU (time-of-check-to-time-of-use) verification</li>
+      <li>Output sanitization &mdash; strips zero-width Unicode and bidi overrides</li>
+      <li>15-minute scan cache with 100-entry LRU eviction</li>
+      <li>fs.watch startup verification with debounced re-scanning</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ─── Footer ───────────────────────────────────────────────────────────── -->
+<footer class="site-footer">
+  <div class="container">
+    <div class="grid grid-3">
+      <div>
+        <h4>SkillSync MCP</h4>
+        <p>Security-gated skill management for AI coding assistants.</p>
+        <p>v1.3.0 &middot; MIT License</p>
+      </div>
+      <div>
+        <h4>Links</h4>
+        <ul>
+          <li><a href="https://www.npmjs.com/package/@stranzwersweb2/skillsync-mcp" target="_blank" rel="noopener">npm</a></li>
+          <li><a href="https://github.com/adityasugandhi/skillsync-mcp" target="_blank" rel="noopener">GitHub</a></li>
+          <li><a href="https://skillsmp.com" target="_blank" rel="noopener">SkillsMP Marketplace</a></li>
+          <li><a href="https://modelcontextprotocol.io" target="_blank" rel="noopener">MCP Protocol</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Author</h4>
+        <p><a href="https://adityasugandhi.com" target="_blank" rel="noopener">Aditya Sugandhi</a></p>
+        <p><a href="https://github.com/adityasugandhi" target="_blank" rel="noopener">GitHub Profile</a></p>
+      </div>
+    </div>
+  </div>
+</footer>
+
+</main>
+<script src="script.js"></script>
+</body>
+</html>

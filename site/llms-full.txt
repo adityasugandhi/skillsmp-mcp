@@ -1,0 +1,383 @@
+# SkillSync MCP — Complete Reference
+
+> Security-gated skill management for AI coding assistants. The only MCP server that gates skill installation behind a full security scan.
+
+## What is SkillSync MCP?
+
+SkillSync MCP (`@stranzwersweb2/skillsync-mcp`) is an open-source Model Context Protocol (MCP) server that acts as a security gateway for installing skills (reusable prompt/tool packages) into AI coding assistants like Claude Code. It connects to the SkillsMP marketplace (skillsmp.com) and provides search, security scanning, installation, and cloud sync capabilities.
+
+The key differentiator: SkillSync is the only tool that gates every skill installation behind a comprehensive security scan using 60+ threat detection patterns across 15 categories. Critical threats (prompt injection, reverse shells, credential theft, supply chain attacks) are permanently blocked with no override.
+
+## Quick Facts
+
+- **Package**: @stranzwersweb2/skillsync-mcp
+- **Version**: 1.3.0
+- **License**: MIT (free and open source)
+- **Author**: Aditya Sugandhi (https://adityasugandhi.com)
+- **npm**: https://www.npmjs.com/package/@stranzwersweb2/skillsync-mcp
+- **GitHub**: https://github.com/adityasugandhi/skillsync-mcp
+- **Website**: https://adityasugandhi.github.io/skillsync-mcp/
+- **Node.js**: Requires >= 20
+- **Transport**: MCP over stdio (StdioServerTransport)
+- **Dependencies**: @modelcontextprotocol/sdk, zod
+
+---
+
+## Installation
+
+### One-line install (npx)
+
+```bash
+npx -y @stranzwersweb2/skillsync-mcp
+```
+
+### Global install
+
+```bash
+npm install -g @stranzwersweb2/skillsync-mcp
+```
+
+### Claude Code
+
+Add to `~/.claude/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "skillsmp": {
+      "command": "npx",
+      "args": ["-y", "@stranzwersweb2/skillsync-mcp"]
+    }
+  }
+}
+```
+
+### OpenClaw
+
+Add to `~/.openclaw/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "skillsmp": {
+      "version": "1.3.0",
+      "autoUpdate": false,
+      "command": "npx",
+      "args": ["-y", "@stranzwersweb2/skillsync-mcp@1.3.0"]
+    }
+  }
+}
+```
+
+OpenClaw uses the same SKILL.md format as Claude Code. Pin versions and review tool policies.
+
+### Cursor
+
+Add to `.cursor/mcp.json` in your project root:
+
+```json
+{
+  "mcpServers": {
+    "skillsmp": {
+      "command": "npx",
+      "args": ["-y", "@stranzwersweb2/skillsync-mcp"]
+    }
+  }
+}
+```
+
+### Windsurf
+
+Add to `~/.windsurf/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "skillsmp": {
+      "command": "npx",
+      "args": ["-y", "@stranzwersweb2/skillsync-mcp"]
+    }
+  }
+}
+```
+
+### GitHub Copilot
+
+Add to `.github/copilot-mcp.json` (project) or `~/.github/copilot-mcp.json` (global):
+
+```json
+{
+  "mcpServers": {
+    "skillsync": {
+      "command": "npx",
+      "args": ["-y", "@stranzwersweb2/skillsync-mcp"],
+      "env": {
+        "SKILLSMP_API_KEY": "your-api-key"
+      }
+    }
+  }
+}
+```
+
+### Zed
+
+Add to `~/.config/zed/settings.json` under `"context_servers"`:
+
+```json
+{
+  "context_servers": {
+    "skillsync": {
+      "command": {
+        "path": "npx",
+        "args": ["-y", "@stranzwersweb2/skillsync-mcp"],
+        "env": {
+          "SKILLSMP_API_KEY": "your-api-key"
+        }
+      }
+    }
+  }
+}
+```
+
+### Client Compatibility Table
+
+| Client | Config Path | Skill Format |
+|--------|------------|--------------|
+| Claude Code | ~/.claude/settings.json | SKILL.md in ~/.claude/skills/ |
+| OpenClaw | ~/.openclaw/mcp.json | SKILL.md (same format) |
+| Cursor | .cursor/mcp.json | MCP tools only |
+| Windsurf | ~/.windsurf/mcp.json | MCP tools only |
+| GitHub Copilot | .github/copilot-mcp.json | MCP tools only |
+| Zed | ~/.config/zed/settings.json | MCP tools only |
+| nanobot | MCP config | MCP tools only |
+
+---
+
+## All 13 MCP Tools (Detailed)
+
+### Search & Discovery
+
+#### 1. skillsmp_search — Keyword Search
+Search the SkillsMP marketplace by keyword. Returns skill names, descriptions, authors, star counts, and GitHub links. Supports sorting by stars or recency. All results are sanitized against prompt injection.
+
+Parameters:
+- query (string, required): Search keyword(s), 1-200 chars
+- limit (number, optional): Max results, 1-100, default 20
+- sortBy (enum, optional): "stars" or "recent", default "recent"
+
+#### 2. skillsmp_ai_search — AI Semantic Search
+Natural language search powered by Cloudflare AI. Returns relevance-scored results. Finds skills even when keywords do not exactly match.
+
+Parameters:
+- query (string, required): Natural language search query, 1-200 chars
+- limit (number, optional): Max results, 1-50, default 10
+
+#### 3. skillsmp_search_safe — Search + Auto-Scan
+Combines keyword search with automatic security scanning of the top N results. Shows risk levels and threat summaries inline with search results.
+
+Parameters:
+- query (string, required): Search keyword(s)
+- limit (number, optional): Max search results, default 10
+- scanTop (number, optional): How many top results to scan, 1-5, default 3
+- sortBy (enum, optional): "stars" or "recent"
+
+#### 4. skillsmp_suggest — AI Suggestions
+Recommends new skills based on what you already have installed and optional context about your current project. Filters out already-installed skills.
+
+Parameters:
+- context (string, optional): What you're working on, e.g. "React testing"
+- limit (number, optional): Max suggestions, 1-20, default 5
+
+### Security
+
+#### 5. skillsmp_scan_skill — Security Scan
+Scans a GitHub skill repository for 60+ threat patterns across 15 categories. Returns a risk level (safe/low/medium/high/critical), threat list with line numbers, content hash, files scanned count, and recommendation.
+
+Parameters:
+- githubUrl (string, required): GitHub URL to scan
+
+#### 6. skillsmp_compare — Side-by-Side Compare
+Compare two skills by GitHub URL or installed skill name. Shows risk levels, threat counts, categories, and a recommendation for which is safer.
+
+Parameters:
+- skillA (string, required): GitHub URL or installed skill name
+- skillB (string, required): GitHub URL or installed skill name
+
+#### 7. skillsmp_audit_installed — Deep Audit
+Forces a fresh security scan on a specific installed skill. Shows detailed threat report, file count, total size, content hash, and SKILL.md status.
+
+Parameters:
+- name (string, required): Name of the installed skill
+
+### Skill Management
+
+#### 8. skillsmp_install_skill — Install
+Scans a GitHub skill, then installs it to ~/.claude/skills/. Critical threats are permanently blocked. Medium/high risk requires force=true. Runs npm install with --ignore-scripts.
+
+Parameters:
+- githubUrl (string, required): GitHub URL
+- name (string, optional): Custom skill name
+- force (boolean, optional): Override medium/high risk block
+
+#### 9. skillsmp_uninstall_skill — Uninstall
+Removes an installed skill directory and updates the in-memory registry.
+
+Parameters:
+- name (string, required): Skill name to remove
+
+#### 10. skillsmp_list_installed — List Installed
+Lists all installed skills with risk levels, file counts, SKILL.md status, and last scan timestamps.
+
+Parameters:
+- refresh (boolean, optional): Force re-sync before listing
+
+### Cloud Sync
+
+#### 11. skillsync_configure — Configure Sync
+Manage sync subscriptions and settings. Add/remove search subscriptions, set sync interval (hours), risk threshold (safe/low/medium), and conflict policy (skip/overwrite/unmanage).
+
+Parameters:
+- action (enum, required): "add", "remove", "list", or "set"
+- query (string, optional): For add action
+- subscriptionId (string, optional): For remove action
+- syncIntervalHours (number, optional): For set action, 0=manual
+- maxRiskLevel (enum, optional): "safe", "low", or "medium"
+- conflictPolicy (enum, optional): "skip", "overwrite", or "unmanage"
+
+#### 12. skillsync_sync_now — Run Sync
+Polls subscriptions, diffs against installed skills, installs/updates/removes as needed. Supports dry-run mode.
+
+Parameters:
+- dryRun (boolean, optional): Preview without changes, default false
+
+#### 13. skillsync_status — Sync Status
+Shows sync engine state: managed vs manual skills, subscription count, last sync time, next scheduled sync.
+
+No parameters.
+
+---
+
+## Security Model (Detailed)
+
+### Risk Levels
+
+| Level | Behavior |
+|-------|----------|
+| Safe / Low | Install proceeds with warnings shown |
+| Medium / High | Blocked — requires force=true to override |
+| Critical | Permanently blocked — no override possible |
+
+### 15 Threat Categories
+
+**Critical (block installation):**
+1. Prompt Injection — override AI instructions, role reassignment, fake system prompts, LLM control tokens, hidden HTML instructions, zero-width Unicode
+2. Unicode Homoglyphs — Cyrillic/Greek/IPA/fullwidth characters mixed with ASCII for visual spoofing
+3. Destructive Shell — rm -rf /, chmod 777, mkfs, dd, fork bombs
+4. Remote Code Execution — curl/wget pipe to shell, secret exfiltration via curl
+5. Reverse Shells — bash /dev/tcp, netcat, ncat, socat, Python/PHP/Ruby/Perl one-liners
+6. Credential Theft — SSH keys, AWS creds, GPG keys, Kubernetes config, Docker config, .env files, wallet files, keychain
+7. Supply Chain — overwrite package.json, write to node_modules, modify CI/CD workflows, npm publish, npm registry redirect, git credential modification
+8. Privilege Escalation — sudo, write to /etc/ or /usr/, chown root
+9. Exfiltration — secret exfiltration via curl with environment variables
+
+**Warning (flag for review):**
+10. Obfuscation — Base64/hex decoding, String.fromCharCode, shell base64 decode pipes
+11. Code Execution — eval(), new Function(), dynamic import/require, process.binding, VM module
+12. Shell Execution — child_process, execSync/spawnSync, exec with string args
+13. Network — fetch to external domains, axios, raw sockets, WebSocket, HTTP servers
+14. Crypto Mining — stratum pool connections, xmrig/cryptonight/coinhive/cpuminer
+15. Dotfile Poisoning — writing to .bashrc, .zshrc, .npmrc, .yarnrc, .gitconfig
+
+Additional warning categories: DNS exfiltration, crypto wallet addresses, filesystem writes outside project, prototype pollution, time bombs, environment modification, clipboard/input capture.
+
+### Multi-line Pattern Detection
+
+The scanner also applies multi-line patterns to detect evasion attempts where malicious commands are split across lines (e.g., curl pipe to shell with line continuation).
+
+### Safety Guards
+
+- **SSRF Prevention**: Only github.com URLs accepted for scanning
+- **Path Traversal Prevention**: Skill names validated against /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/
+- **npm --ignore-scripts**: Blocks postinstall/preinstall script attacks
+- **File Limits**: Max 50 files, 512KB per file, 2MB total per skill
+- **ReDoS Protection**: Lines over 2000 characters are skipped
+- **Content Hashing**: SHA-256 hash for TOCTOU (time-of-check-to-time-of-use) verification
+- **Output Sanitization**: Strips zero-width Unicode characters and bidirectional text overrides from all third-party content
+- **Scan Cache**: 15-minute TTL with 100-entry LRU eviction
+- **Startup Verification**: Background discovery, content hashing, and fs.watch for live filesystem sync
+- **Binary Detection**: 30+ binary extensions skipped automatically
+- **Suspicious Filenames**: postinstall.sh, preinstall.js, .env, .npmrc, makefile flagged
+
+---
+
+## Architecture
+
+### Data Flow
+
+```
+MCP Client (stdio) → tools.ts (13 tool handlers) → Business Logic → Response
+                                                     ├── api-client.ts (SkillsMP REST API)
+                                                     ├── security-scanner.ts (GitHub fetch + threat scan)
+                                                     ├── skill-manager.ts (installed skill registry + fs.watch)
+                                                     ├── installer.ts (filesystem + npm install)
+                                                     ├── sync-engine.ts (cloud sync orchestration)
+                                                     └── sanitize.ts (output safety)
+```
+
+### Startup Sequence
+
+1. McpServer created
+2. registerTools(server) — registers all 13 tools
+3. server.connect(transport) — MCP is live, tools available immediately
+4. skillManager.initialize() — BACKGROUND (fire-and-forget)
+   - Discover skills in ~/.claude/skills/
+   - Security scan each skill
+   - Start fs.watch for live additions/removals
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| src/index.ts | Entry point — creates McpServer, connects stdio |
+| src/tools.ts | 13 MCP tool definitions with Zod schemas |
+| src/skill-manager.ts | Discovery, local scanning, registry, fs.watch |
+| src/api-client.ts | SkillsMP marketplace REST API client |
+| src/security-scanner.ts | Core threat engine — GitHub fetch + pattern matching |
+| src/installer.ts | Skill install/uninstall — path validation, file writing |
+| src/patterns.ts | 60+ regex threat patterns (CRITICAL + WARNING) |
+| src/constants.ts | Config: skills dir, file limits, extensions |
+| src/sanitize.ts | Anti prompt injection output cleaning |
+| src/sync-engine.ts | Cloud sync orchestration |
+| src/sync-config.ts | Sync subscription management |
+| src/sync-lock.ts | Managed skill lock file |
+
+---
+
+## Why SkillSync vs Alternatives
+
+| Capability | Raw git clone | Other Tools | SkillSync MCP |
+|-----------|--------------|-------------|---------------|
+| Security scan before install | No | No | Yes — 60+ patterns |
+| Blocks critical threats | No | No | Yes — prompt injection, RCE, credential theft |
+| Multi-client support | N/A | Varies | 7 clients |
+| Marketplace search | Manual | Some | Keyword + AI semantic |
+| Cloud sync | No | No | Subscription-based sync |
+| Startup verification | No | No | fs.watch + content hash |
+| Output sanitization | No | No | Anti prompt injection |
+
+---
+
+## Development
+
+```bash
+git clone https://github.com/adityasugandhi/skillsync-mcp.git
+cd skillsync-mcp
+npm install
+npm run build
+npm run dev       # Watch mode
+npm run test:build  # Build + run tests (89 test cases)
+```
+
+## Contributing
+
+See CONTRIBUTING.md. Browse open issues or look for the good-first-issue label. All PRs must pass the existing test suite.

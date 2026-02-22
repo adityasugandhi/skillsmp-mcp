@@ -1,0 +1,87 @@
+# SkillSync MCP
+
+> Security-gated skill management for AI coding assistants. The only MCP server that gates skill installation behind a full security scan.
+
+## Overview
+
+SkillSync MCP (`@stranzwersweb2/skillsync-mcp`) is an open-source Model Context Protocol (MCP) server that provides security-gated skill management for Claude Code and 6 other MCP-compatible clients. It scans GitHub skill repositories for 60+ threat patterns across 15 categories before allowing installation, permanently blocking critical threats like prompt injection, reverse shells, credential theft, and supply chain attacks.
+
+- **Version**: 1.3.0
+- **License**: MIT
+- **Author**: Aditya Sugandhi
+- **npm**: https://www.npmjs.com/package/@stranzwersweb2/skillsync-mcp
+- **GitHub**: https://github.com/adityasugandhi/skillsync-mcp
+- **Website**: https://adityasugandhi.github.io/skillsync-mcp/
+
+## Install
+
+```bash
+npx -y @stranzwersweb2/skillsync-mcp
+```
+
+Or add to Claude Code's `~/.claude/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "skillsmp": {
+      "command": "npx",
+      "args": ["-y", "@stranzwersweb2/skillsync-mcp"]
+    }
+  }
+}
+```
+
+## 13 MCP Tools
+
+### Search & Discovery
+- `skillsmp_search` — Keyword search across SkillsMP marketplace
+- `skillsmp_ai_search` — AI-powered semantic search via Cloudflare AI
+- `skillsmp_search_safe` — Search + auto-scan top results for security threats
+- `skillsmp_suggest` — AI-powered skill recommendations based on installed skills
+
+### Security
+- `skillsmp_scan_skill` — Security scan a GitHub skill repo (60+ patterns, 15 categories)
+- `skillsmp_compare` — Side-by-side security comparison of two skills
+- `skillsmp_audit_installed` — Deep security audit of a specific installed skill
+
+### Skill Management
+- `skillsmp_install_skill` — Scan then install to ~/.claude/skills/ (blocks critical threats)
+- `skillsmp_uninstall_skill` — Remove an installed skill
+- `skillsmp_list_installed` — List all installed skills with risk levels
+
+### Cloud Sync
+- `skillsync_configure` — Manage sync subscriptions and settings
+- `skillsync_sync_now` — Run sync cycle (install/update/remove skills)
+- `skillsync_status` — Show sync engine status
+
+## Supported Clients (7)
+
+Claude Code, OpenClaw, Cursor, Windsurf, GitHub Copilot, Zed, nanobot
+
+## Security Model
+
+Every installation is gated by a multi-level security scan:
+
+- **Safe/Low risk**: Install proceeds with warnings
+- **Medium/High risk**: Blocked, requires force=true
+- **Critical risk**: Permanently blocked, no override
+
+### 15 Threat Categories Detected
+
+Prompt Injection, Unicode Homoglyphs, Destructive Shell, Remote Code Execution, Reverse Shells, Credential Theft, Supply Chain, Privilege Escalation, Exfiltration, Obfuscation, Code Execution, Shell Execution, Network, Crypto Mining, Dotfile Poisoning
+
+### Safety Guards
+
+- SSRF prevention (only github.com URLs)
+- Path traversal prevention
+- npm install --ignore-scripts
+- Max 50 files, 512KB per file, 2MB total
+- SHA-256 content hashing for TOCTOU verification
+- Output sanitization (strips zero-width Unicode, bidi overrides)
+- 15-minute scan cache with LRU eviction
+- fs.watch startup verification
+
+## Tech Stack
+
+TypeScript, Node.js 20+, @modelcontextprotocol/sdk, Zod validation, MCP over stdio
