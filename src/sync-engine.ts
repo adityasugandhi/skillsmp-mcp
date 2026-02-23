@@ -1,9 +1,10 @@
 import { searchSkills, type SkillResult } from "./api-client.js";
 import { installSkill, uninstallSkill } from "./installer.js";
-import { skillManager } from "./skill-manager.js";
+import { getSkillManager, type SkillManager } from "./skill-manager.js";
 import { readSyncConfig, type SyncConfig, type SyncSubscription } from "./sync-config.js";
 import { readSyncLock, writeSyncLock, isSyncManaged, type SyncLockFile, type LockedSkill } from "./sync-lock.js";
 import { SYNC_API_DELAY_MS, RISK_LEVEL_ORDER } from "./constants.js";
+import { type SkillScope, type ResolvedPaths, resolvePaths } from "./scope-resolver.js";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -62,6 +63,7 @@ export function computeSyncDiff(
   discovered: Map<string, DiscoveredSkill>,
   lock: SyncLockFile,
   config: SyncConfig,
+  mgr?: SkillManager,
 ): SyncDiffResult {
   const toInstall: SyncDiffResult["toInstall"] = [];
   const toUpdate: SyncDiffResult["toUpdate"] = [];
@@ -69,6 +71,7 @@ export function computeSyncDiff(
   const conflicts: SyncDiffResult["conflicts"] = [];
 
   const maxRisk = RISK_LEVEL_ORDER[config.maxRiskLevel] ?? 1;
+  const manager = mgr ?? getSkillManager("global");
 
   // Check discovered skills against lock
   for (const [githubUrl, disc] of discovered) {
@@ -83,7 +86,7 @@ export function computeSyncDiff(
       // Existing — check for upstream changes via updatedAt
       if (updatedAt !== locked.upstreamUpdatedAt) {
         // Check local modification (conflict detection)
-        const localSkill = skillManager.getSkill(locked.name);
+        const localSkill = manager.getSkill(locked.name);
         if (localSkill && localSkill.contentHash !== locked.installedHash) {
           // Local was modified after install
           if (config.conflictPolicy === "skip") {
@@ -135,10 +138,12 @@ function delay(ms: number): Promise<void> {
 
 // ─── SyncEngine Class ────────────────────────────────────────────────────────
 
-class SyncEngine {
+export class SyncEngine {
   private syncing = false;
   private timer: ReturnType<typeof setInterval> | null = null;
   private lastSyncStart: number | null = null;
+
+  constructor(private readonly paths: ResolvedPaths) {}
 
   async sync(options?: { dryRun?: boolean }): Promise<SyncReport> {
     const dryRun = options?.dryRun ?? false;
@@ -158,9 +163,10 @@ class SyncEngine {
     this.lastSyncStart = Date.now();
     const startedAt = new Date().toISOString();
     const actions: SyncAction[] = [];
+    const manager = getSkillManager(this.paths.scope);
 
     try {
-      const config = await readSyncConfig();
+      const config = await readSyncConfig(this.paths.syncConfigPath);
 
       if (!config.enabled) {
         this.syncing = false;
@@ -235,8 +241,8 @@ class SyncEngine {
       }
 
       // Phase 2: Compute diff
-      const lock = await readSyncLock();
-      const diff = computeSyncDiff(discovered, lock, config);
+      const lock = await readSyncLock(this.paths.syncLockPath);
+      const diff = computeSyncDiff(discovered, lock, config, manager);
       const maxRisk = RISK_LEVEL_ORDER[config.maxRiskLevel] ?? 1;
 
       // Phase 3: Handle conflicts
@@ -269,7 +275,7 @@ class SyncEngine {
         }
 
         try {
-          const result = await installSkill(item.githubUrl, item.name, false);
+          const result = await installSkill(item.githubUrl, item.name, false, this.paths.scope);
           const skillName = result.installPath.split("/").pop() || item.name;
 
           // Check risk level
@@ -277,7 +283,7 @@ class SyncEngine {
           const riskNum = RISK_LEVEL_ORDER[riskStr] ?? 0;
           if (riskNum > maxRisk) {
             // Undo install — too risky
-            try { await uninstallSkill(skillName); } catch { /* best effort */ }
+            try { await uninstallSkill(skillName, this.paths.scope); } catch { /* best effort */ }
             actions.push({
               type: "skip-risk",
               skillName,
@@ -289,7 +295,7 @@ class SyncEngine {
           }
 
           // Update skill manager registry
-          try { await skillManager.scanLocalSkill(skillName); } catch { /* non-fatal */ }
+          try { await manager.scanLocalSkill(skillName); } catch { /* non-fatal */ }
 
           // Update lock
           lock.skills[skillName] = {
@@ -331,7 +337,7 @@ class SyncEngine {
         }
 
         try {
-          const result = await installSkill(item.githubUrl, item.name, true);
+          const result = await installSkill(item.githubUrl, item.name, true, this.paths.scope);
           const skillName = result.installPath.split("/").pop() || item.name;
 
           const riskStr = result.scanSummary.split(" ")[0].toLowerCase();
@@ -347,7 +353,7 @@ class SyncEngine {
             continue;
           }
 
-          try { await skillManager.scanLocalSkill(skillName); } catch { /* non-fatal */ }
+          try { await manager.scanLocalSkill(skillName); } catch { /* non-fatal */ }
 
           if (lock.skills[skillName]) {
             lock.skills[skillName].installedHash = result.contentHash;
@@ -385,8 +391,8 @@ class SyncEngine {
         }
 
         try {
-          await uninstallSkill(item.name);
-          skillManager.removeSkill(item.name);
+          await uninstallSkill(item.name, this.paths.scope);
+          manager.removeSkill(item.name);
           delete lock.skills[item.name];
           actions.push({
             type: "remove",
@@ -408,7 +414,7 @@ class SyncEngine {
       if (!dryRun) {
         lock.lastSyncRun = new Date().toISOString();
         lock.syncCount = (lock.syncCount || 0) + 1;
-        await writeSyncLock(lock);
+        await writeSyncLock(lock, this.paths.syncLockPath);
       }
 
       const finishedAt = new Date().toISOString();
@@ -439,22 +445,22 @@ class SyncEngine {
   }
 
   async startPeriodicSync(): Promise<void> {
-    const config = await readSyncConfig();
+    const config = await readSyncConfig(this.paths.syncConfigPath);
 
     if (!config.enabled || config.syncIntervalHours <= 0) {
-      console.error("[skillsync] Periodic sync disabled (interval=0 or disabled)");
+      console.error(`[skillsync:${this.paths.scope}] Periodic sync disabled (interval=0 or disabled)`);
       return;
     }
 
     const intervalMs = config.syncIntervalHours * 60 * 60 * 1000;
-    console.error(`[skillsync] Starting periodic sync every ${config.syncIntervalHours}h`);
+    console.error(`[skillsync:${this.paths.scope}] Starting periodic sync every ${config.syncIntervalHours}h`);
 
     this.timer = setInterval(() => {
-      console.error("[skillsync] Running periodic sync...");
+      console.error(`[skillsync:${this.paths.scope}] Running periodic sync...`);
       this.sync().then((report) => {
-        console.error(`[skillsync] Periodic sync done: ${report.installed} installed, ${report.updated} updated, ${report.removed} removed, ${report.errors} errors`);
+        console.error(`[skillsync:${this.paths.scope}] Periodic sync done: ${report.installed} installed, ${report.updated} updated, ${report.removed} removed, ${report.errors} errors`);
       }).catch((err) => {
-        console.error(`[skillsync] Periodic sync error: ${err instanceof Error ? err.message : "unknown"}`);
+        console.error(`[skillsync:${this.paths.scope}] Periodic sync error: ${err instanceof Error ? err.message : "unknown"}`);
       });
     }, intervalMs);
 
@@ -472,8 +478,8 @@ class SyncEngine {
   }
 
   async getStatus(): Promise<SyncStatus> {
-    const config = await readSyncConfig();
-    const lock = await readSyncLock();
+    const config = await readSyncConfig(this.paths.syncConfigPath);
+    const lock = await readSyncLock(this.paths.syncLockPath);
 
     let nextSyncIn: string | null = null;
     if (this.timer && config.syncIntervalHours > 0 && this.lastSyncStart) {
@@ -502,6 +508,26 @@ class SyncEngine {
   }
 }
 
-// ─── Singleton ───────────────────────────────────────────────────────────────
+// ─── Factory ─────────────────────────────────────────────────────────────────
 
-export const syncEngine = new SyncEngine();
+const engines = new Map<string, SyncEngine>();
+
+export function getSyncEngine(scope: SkillScope = "global"): SyncEngine {
+  const paths = resolvePaths(scope);
+  const key = paths.skillsDir;
+  let engine = engines.get(key);
+  if (!engine) {
+    engine = new SyncEngine(paths);
+    engines.set(key, engine);
+  }
+  return engine;
+}
+
+export function shutdownAllEngines(): void {
+  engines.forEach((e) => e.shutdown());
+  engines.clear();
+}
+
+// ─── Backward Compatibility ──────────────────────────────────────────────────
+
+export const syncEngine = getSyncEngine("global");

@@ -69,9 +69,10 @@ export function defaultConfig(): SyncConfig {
 
 // ─── Read / Write ────────────────────────────────────────────────────────────
 
-export async function readSyncConfig(): Promise<SyncConfig> {
+export async function readSyncConfig(configPath?: string): Promise<SyncConfig> {
+  const path = configPath ?? SYNC_CONFIG_PATH;
   try {
-    const raw = await readFile(SYNC_CONFIG_PATH, "utf-8");
+    const raw = await readFile(path, "utf-8");
     const parsed = JSON.parse(raw);
     return configSchema.parse(parsed);
   } catch (err) {
@@ -86,45 +87,46 @@ export async function readSyncConfig(): Promise<SyncConfig> {
   }
 }
 
-export async function writeSyncConfig(config: SyncConfig): Promise<void> {
+export async function writeSyncConfig(config: SyncConfig, configPath?: string): Promise<void> {
+  const path = configPath ?? SYNC_CONFIG_PATH;
   const validated = configSchema.parse(config);
-  await mkdir(dirname(SYNC_CONFIG_PATH), { recursive: true });
-  await writeFile(SYNC_CONFIG_PATH, JSON.stringify(validated, null, 2) + "\n", "utf-8");
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, JSON.stringify(validated, null, 2) + "\n", "utf-8");
 }
 
-export async function mergeSyncConfig(partial: Partial<Omit<SyncConfig, "version" | "subscriptions">>): Promise<SyncConfig> {
-  const current = await readSyncConfig();
+export async function mergeSyncConfig(partial: Partial<Omit<SyncConfig, "version" | "subscriptions">>, configPath?: string): Promise<SyncConfig> {
+  const current = await readSyncConfig(configPath);
   const merged: SyncConfig = {
     ...current,
     ...partial,
     version: 1,
     subscriptions: current.subscriptions,
   };
-  await writeSyncConfig(merged);
+  await writeSyncConfig(merged, configPath);
   return merged;
 }
 
 // ─── Subscription Management ─────────────────────────────────────────────────
 
-export async function addSubscription(sub: Omit<SyncSubscription, "id">): Promise<{ config: SyncConfig; subscription: SyncSubscription }> {
-  const config = await readSyncConfig();
+export async function addSubscription(sub: Omit<SyncSubscription, "id">, configPath?: string): Promise<{ config: SyncConfig; subscription: SyncSubscription }> {
+  const config = await readSyncConfig(configPath);
   const subscription: SyncSubscription = {
     ...sub,
     id: randomUUID(),
     enabled: sub.enabled ?? true,
   };
   config.subscriptions.push(subscription);
-  await writeSyncConfig(config);
+  await writeSyncConfig(config, configPath);
   return { config, subscription };
 }
 
-export async function removeSubscription(id: string): Promise<{ config: SyncConfig; removed: boolean }> {
-  const config = await readSyncConfig();
+export async function removeSubscription(id: string, configPath?: string): Promise<{ config: SyncConfig; removed: boolean }> {
+  const config = await readSyncConfig(configPath);
   const before = config.subscriptions.length;
   config.subscriptions = config.subscriptions.filter((s) => s.id !== id);
   const removed = config.subscriptions.length < before;
   if (removed) {
-    await writeSyncConfig(config);
+    await writeSyncConfig(config, configPath);
   }
   return { config, removed };
 }

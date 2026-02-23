@@ -38,9 +38,10 @@ export function emptyLock(): SyncLockFile {
 
 // ─── Read / Write ────────────────────────────────────────────────────────────
 
-export async function readSyncLock(): Promise<SyncLockFile> {
+export async function readSyncLock(lockPath?: string): Promise<SyncLockFile> {
+  const path = lockPath ?? SYNC_LOCK_PATH;
   try {
-    const raw = await readFile(SYNC_LOCK_PATH, "utf-8");
+    const raw = await readFile(path, "utf-8");
     const parsed = JSON.parse(raw);
     if (parsed && typeof parsed === "object" && parsed.version === 1 && typeof parsed.skills === "object") {
       return parsed as SyncLockFile;
@@ -55,26 +56,27 @@ export async function readSyncLock(): Promise<SyncLockFile> {
   }
 }
 
-export async function writeSyncLock(lock: SyncLockFile): Promise<void> {
-  await mkdir(dirname(SYNC_LOCK_PATH), { recursive: true });
-  const tmpPath = SYNC_LOCK_PATH + ".tmp";
+export async function writeSyncLock(lock: SyncLockFile, lockPath?: string): Promise<void> {
+  const path = lockPath ?? SYNC_LOCK_PATH;
+  await mkdir(dirname(path), { recursive: true });
+  const tmpPath = path + ".tmp";
   await writeFile(tmpPath, JSON.stringify(lock, null, 2) + "\n", "utf-8");
-  await rename(tmpPath, SYNC_LOCK_PATH);
+  await rename(tmpPath, path);
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-export async function upsertLockedSkill(skill: LockedSkill): Promise<void> {
-  const lock = await readSyncLock();
+export async function upsertLockedSkill(skill: LockedSkill, lockPath?: string): Promise<void> {
+  const lock = await readSyncLock(lockPath);
   lock.skills[skill.name] = skill;
-  await writeSyncLock(lock);
+  await writeSyncLock(lock, lockPath);
 }
 
-export async function removeLockedSkill(name: string): Promise<boolean> {
-  const lock = await readSyncLock();
+export async function removeLockedSkill(name: string, lockPath?: string): Promise<boolean> {
+  const lock = await readSyncLock(lockPath);
   if (!(name in lock.skills)) return false;
   delete lock.skills[name];
-  await writeSyncLock(lock);
+  await writeSyncLock(lock, lockPath);
   return true;
 }
 

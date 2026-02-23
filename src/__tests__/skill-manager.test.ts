@@ -4,11 +4,8 @@ import { mkdir, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-// We test the SkillManager class by importing it and overriding SKILLS_DIR.
-// Since SKILLS_DIR is a constant, we test the individual logic via the exported
-// singleton and temporary directories.
-
-import { skillManager } from "../skill-manager.js";
+import { skillManager, SkillManager, getSkillManager } from "../skill-manager.js";
+import { resolvePaths } from "../scope-resolver.js";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -91,6 +88,8 @@ describe("SkillManager", () => {
         },
         contentHash: "abc123",
         lastScanned: Date.now(),
+        scope: "global",
+        scopeLabel: "global (~/.claude/skills/)",
       });
 
       assert.ok(skillManager.getSkill("test-skill"));
@@ -106,12 +105,14 @@ describe("SkillManager", () => {
         hasSkillMd: true,
         scanResult: { safe: true, riskLevel: "safe", threats: [], recommendation: "", contentHash: "h1" },
         contentHash: "h1", lastScanned: Date.now(),
+        scope: "global", scopeLabel: "global",
       });
       skillManager.registry.set("b", {
         name: "b", path: "/tmp/b", filesCount: 2, totalSize: 20,
         hasSkillMd: false,
         scanResult: { safe: true, riskLevel: "safe", threats: [], recommendation: "", contentHash: "h2" },
         contentHash: "h2", lastScanned: Date.now(),
+        scope: "global", scopeLabel: "global",
       });
 
       const all = skillManager.getAllSkills();
@@ -145,6 +146,7 @@ describe("SkillManager", () => {
         hasSkillMd: false,
         scanResult: { safe: true, riskLevel: "safe", threats: [], recommendation: "", contentHash: "" },
         contentHash: "", lastScanned: Date.now(),
+        scope: "global", scopeLabel: "global",
       });
 
       const sync = await skillManager.syncRegistry();
@@ -161,11 +163,38 @@ describe("SkillManager", () => {
         hasSkillMd: false,
         scanResult: { safe: true, riskLevel: "safe", threats: [], recommendation: "", contentHash: "" },
         contentHash: "", lastScanned: Date.now(),
+        scope: "global", scopeLabel: "global",
       });
 
       skillManager.shutdown();
       assert.equal(skillManager.registry.size, 0);
       assert.equal(skillManager.initialized, false);
     });
+  });
+});
+
+describe("SkillManager Factory", () => {
+  it("should return the same instance for the same scope", () => {
+    const a = getSkillManager("global");
+    const b = getSkillManager("global");
+    assert.strictEqual(a, b);
+  });
+
+  it("should return different instances for different scopes", () => {
+    const global = getSkillManager("global");
+    const project = getSkillManager("project");
+    assert.notStrictEqual(global, project);
+  });
+
+  it("should have correct scope in paths", () => {
+    const global = getSkillManager("global");
+    const project = getSkillManager("project");
+    assert.equal(global.paths.scope, "global");
+    assert.equal(project.paths.scope, "project");
+  });
+
+  it("should be a SkillManager instance", () => {
+    const mgr = getSkillManager("global");
+    assert.ok(mgr instanceof SkillManager);
   });
 });

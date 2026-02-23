@@ -4,11 +4,29 @@ import { searchSkills, aiSearchSkills } from "./api-client.js";
 import { fetchAndScanSkill } from "./security-scanner.js";
 import { installSkill, uninstallSkill } from "./installer.js";
 import { sanitizeText, sanitizeUrl } from "./sanitize.js";
-import { skillManager } from "./skill-manager.js";
-import { syncEngine } from "./sync-engine.js";
+import { getSkillManager, getAllManagers } from "./skill-manager.js";
+import { getSyncEngine, shutdownAllEngines } from "./sync-engine.js";
 import { readSyncConfig, writeSyncConfig, mergeSyncConfig, addSubscription, removeSubscription } from "./sync-config.js";
 import { readSyncLock, isSyncManaged } from "./sync-lock.js";
+import { resolvePaths, type SkillScope } from "./scope-resolver.js";
 import type { SkillResult, AiSearchResult } from "./api-client.js";
+
+// ─── Reusable Scope Schema ──────────────────────────────────────────────────
+
+const scopeParam = z.enum(["global", "project"]).default("global")
+  .describe('Scope: "global" (~/.claude/skills/) or "project" (.claude/skills/ in cwd)');
+
+const scopeParamAll = z.enum(["global", "project", "all"]).default("global")
+  .describe('Scope: "global", "project", or "all" for cross-scope view');
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+async function ensureManagerInitialized(scope: SkillScope): Promise<void> {
+  const mgr = getSkillManager(scope);
+  if (!mgr.initialized) {
+    await mgr.initialize();
+  }
+}
 
 // ─── Output Formatting (sanitized against prompt injection) ──────────────────
 
@@ -61,7 +79,7 @@ const UNTRUSTED_DISCLAIMER =
 // ─── Tool Registration ───────────────────────────────────────────────────────
 
 export function registerTools(server: McpServer): void {
-  // 1. Keyword search
+  // 1. Keyword search (no scope — marketplace only)
   server.tool(
     "skillsmp_search",
     "Search SkillsMP marketplace for skills by keyword. Returns names, descriptions, authors, and GitHub links. WARNING: Results contain untrusted third-party content.",
@@ -85,7 +103,7 @@ export function registerTools(server: McpServer): void {
     }
   );
 
-  // 2. AI semantic search
+  // 2. AI semantic search (no scope — marketplace only)
   server.tool(
     "skillsmp_ai_search",
     "AI-powered semantic search on SkillsMP. Uses Cloudflare AI for relevance matching. WARNING: Results contain untrusted third-party content.",
@@ -108,7 +126,7 @@ export function registerTools(server: McpServer): void {
     }
   );
 
-  // 3. Security scan
+  // 3. Security scan (no scope — remote GitHub scan only)
   server.tool(
     "skillsmp_scan_skill",
     "Scan a skill's GitHub source for security threats: prompt injection, reverse shells, credential theft, supply chain attacks, crypto mining, and 60+ other patterns. Only accepts github.com URLs.",
@@ -164,7 +182,7 @@ export function registerTools(server: McpServer): void {
     }
   );
 
-  // 4. Search + auto-scan (safe search)
+  // 4. Search + auto-scan (no scope — marketplace + remote scan only)
   server.tool(
     "skillsmp_search_safe",
     "Search SkillsMP and auto-scan top results for security threats. Combines keyword search with vulnerability scanning for each result.",
@@ -236,32 +254,36 @@ export function registerTools(server: McpServer): void {
     }
   );
 
-  // 5. Install skill
+  // 5. Install skill (with scope)
   server.tool(
     "skillsmp_install_skill",
-    "Security-scan a skill from GitHub, then install it to ~/.claude/skills/ for Claude Code. Blocks on critical threats. Requires force=true for medium/high risk or to overwrite existing skills.",
+    'Security-scan a skill from GitHub, then install it. Blocks on critical threats. Use scope="project" to install to .claude/skills/ in cwd, or "global" (default) for ~/.claude/skills/.',
     {
       githubUrl: z.string().url().describe("GitHub URL (https://github.com/user/repo/tree/branch/path)"),
       name: z.string().min(1).max(64).optional().describe("Skill name (inferred from URL if omitted)"),
       force: z.boolean().default(false).describe("Force install: skip medium/high risk block, overwrite existing"),
+      scope: scopeParam,
     },
-    async ({ githubUrl, name, force }) => {
+    async ({ githubUrl, name, force, scope }) => {
       try {
-        const result = await installSkill(githubUrl, name, force);
+        const result = await installSkill(githubUrl, name, force, scope as SkillScope);
 
         // Update skill registry
+        const mgr = getSkillManager(scope as SkillScope);
         const skillName = result.installPath.split("/").pop();
         if (skillName) {
           try {
-            await skillManager.scanLocalSkill(skillName);
+            await mgr.scanLocalSkill(skillName);
           } catch {
             // Non-fatal — registry will catch up on next sync
           }
         }
 
+        const scopeLabel = scope === "project" ? " (project)" : " (global)";
         const lines = [
-          `## Skill Installed Successfully`,
+          `## Skill Installed Successfully${scopeLabel}`,
           "",
+          `- **Scope**: ${scope}`,
           `- **Path**: \`${result.installPath}\``,
           `- **Files**: ${result.filesCount}`,
           `- **Content Hash**: \`${result.contentHash.substring(0, 16)}...\``,
@@ -286,21 +308,22 @@ export function registerTools(server: McpServer): void {
     }
   );
 
-  // 6. Uninstall skill
+  // 6. Uninstall skill (with scope)
   server.tool(
     "skillsmp_uninstall_skill",
-    "Remove an installed skill from ~/.claude/skills/ by name.",
+    'Remove an installed skill by name. Use scope="project" for .claude/skills/ in cwd, or "global" (default) for ~/.claude/skills/.',
     {
       name: z.string().min(1).max(64).describe("Name of the skill directory to remove"),
+      scope: scopeParam,
     },
-    async ({ name }) => {
+    async ({ name, scope }) => {
       try {
-        const result = await uninstallSkill(name);
-        skillManager.removeSkill(name);
+        const result = await uninstallSkill(name, scope as SkillScope);
+        getSkillManager(scope as SkillScope).removeSkill(name);
         return {
           content: [{
             type: "text",
-            text: `## Skill Uninstalled\n\n- **Removed**: \`${result.removedPath}\`\n\n${result.message} Restart Claude Code to apply changes.`,
+            text: `## Skill Uninstalled (${scope})\n\n- **Removed**: \`${result.removedPath}\`\n\n${result.message} Restart Claude Code to apply changes.`,
           }],
         };
       } catch (error) {
@@ -310,37 +333,52 @@ export function registerTools(server: McpServer): void {
     }
   );
 
-  // 7. List installed skills
+  // 7. List installed skills (with scope + "all")
   server.tool(
     "skillsmp_list_installed",
-    "List all installed skills with security status. Discovers skills in ~/.claude/skills/ and shows their risk levels from the last security scan.",
+    'List all installed skills with security status. Use scope="all" for cross-scope view, "project" for .claude/skills/, or "global" (default) for ~/.claude/skills/.',
     {
       refresh: z.boolean().default(false).describe("Force re-sync before listing (re-scans all skills)"),
+      scope: scopeParamAll,
     },
-    async ({ refresh }) => {
+    async ({ refresh, scope }) => {
       try {
-        if (refresh) {
-          const sync = await skillManager.syncRegistry();
-          const syncLines: string[] = [];
-          if (sync.added.length > 0) syncLines.push(`**Added**: ${sync.added.join(", ")}`);
-          if (sync.removed.length > 0) syncLines.push(`**Removed**: ${sync.removed.join(", ")}`);
-          if (sync.modified.length > 0) syncLines.push(`**Modified**: ${sync.modified.join(", ")}`);
-          if (syncLines.length > 0) {
-            syncLines.unshift("### Sync Changes\n");
-            syncLines.push("");
+        const scopes: SkillScope[] = scope === "all" ? ["global", "project"] : [scope as SkillScope];
+
+        for (const s of scopes) {
+          await ensureManagerInitialized(s);
+          if (refresh) {
+            await getSkillManager(s).syncRegistry();
           }
         }
 
-        const summary = skillManager.getSummary();
+        const allSkills: Array<{
+          name: string;
+          riskLevel: string;
+          filesCount: number;
+          hasSkillMd: boolean;
+          lastScanned: string;
+          scope: string;
+        }> = [];
+        const byRisk: Record<string, number> = { safe: 0, low: 0, medium: 0, high: 0, critical: 0 };
 
-        if (summary.total === 0) {
-          const notReady = !skillManager.initialized
+        for (const s of scopes) {
+          const summary = getSkillManager(s).getSummary();
+          for (const sk of summary.skills) {
+            allSkills.push({ ...sk, scope: s });
+            byRisk[sk.riskLevel] = (byRisk[sk.riskLevel] || 0) + 1;
+          }
+        }
+
+        if (allSkills.length === 0) {
+          const scopeLabel = scope === "all" ? "any scope" : `\`${scope}\` scope`;
+          const notReady = scopes.some((s) => !getSkillManager(s).initialized)
             ? "\n\n> Skill scanning is still in progress. Try again with `refresh: true` in a moment."
             : "";
           return {
             content: [{
               type: "text",
-              text: `## Installed Skills\n\nNo skills found in \`~/.claude/skills/\`.${notReady}`,
+              text: `## Installed Skills\n\nNo skills found in ${scopeLabel}.${notReady}`,
             }],
           };
         }
@@ -349,22 +387,38 @@ export function registerTools(server: McpServer): void {
           safe: "\\u2705", low: "\\uD83D\\uDFE1", medium: "\\uD83D\\uDFE0", high: "\\uD83D\\uDD34", critical: "\\uD83D\\uDEAB",
         };
 
+        const showScope = scope === "all";
         const lines = [
-          `## Installed Skills (${summary.total})`,
+          `## Installed Skills (${allSkills.length})${showScope ? " — All Scopes" : ` — ${scope}`}`,
           "",
-          `| Skill | Risk | Files | SKILL.md | Last Scanned |`,
-          `|-------|------|-------|----------|--------------|`,
         ];
 
-        for (const s of summary.skills) {
-          const emoji = riskEmoji[s.riskLevel] || "";
-          const md = s.hasSkillMd ? "Yes" : "No";
-          const scanned = s.lastScanned.split("T")[0];
-          lines.push(`| ${s.name} | ${emoji} ${s.riskLevel.toUpperCase()} | ${s.filesCount} | ${md} | ${scanned} |`);
+        if (showScope) {
+          lines.push(
+            `| Skill | Scope | Risk | Files | SKILL.md | Last Scanned |`,
+            `|-------|-------|------|-------|----------|--------------|`,
+          );
+          for (const s of allSkills) {
+            const emoji = riskEmoji[s.riskLevel] || "";
+            const md = s.hasSkillMd ? "Yes" : "No";
+            const scanned = s.lastScanned.split("T")[0];
+            lines.push(`| ${s.name} | ${s.scope} | ${emoji} ${s.riskLevel.toUpperCase()} | ${s.filesCount} | ${md} | ${scanned} |`);
+          }
+        } else {
+          lines.push(
+            `| Skill | Risk | Files | SKILL.md | Last Scanned |`,
+            `|-------|------|-------|----------|--------------|`,
+          );
+          for (const s of allSkills) {
+            const emoji = riskEmoji[s.riskLevel] || "";
+            const md = s.hasSkillMd ? "Yes" : "No";
+            const scanned = s.lastScanned.split("T")[0];
+            lines.push(`| ${s.name} | ${emoji} ${s.riskLevel.toUpperCase()} | ${s.filesCount} | ${md} | ${scanned} |`);
+          }
         }
 
         lines.push("");
-        const riskSummary = Object.entries(summary.byRisk)
+        const riskSummary = Object.entries(byRisk)
           .filter(([, count]) => count > 0)
           .map(([level, count]) => `${level}: ${count}`)
           .join(", ");
@@ -377,23 +431,26 @@ export function registerTools(server: McpServer): void {
     }
   );
 
-  // 8. Audit a specific installed skill
+  // 8. Audit a specific installed skill (with scope)
   server.tool(
     "skillsmp_audit_installed",
-    "Deep security audit of a specific installed skill. Forces a fresh scan and returns a detailed threat report.",
+    'Deep security audit of a specific installed skill. Use scope="project" for .claude/skills/, or "global" (default) for ~/.claude/skills/.',
     {
       name: z.string().min(1).max(64).describe("Name of the installed skill to audit"),
+      scope: scopeParam,
     },
-    async ({ name }) => {
+    async ({ name, scope }) => {
       try {
-        const skill = await skillManager.scanLocalSkill(name);
+        const mgr = getSkillManager(scope as SkillScope);
+        const skill = await mgr.scanLocalSkill(name);
         const riskEmoji: Record<string, string> = {
           safe: "\\u2705", low: "\\uD83D\\uDFE1", medium: "\\uD83D\\uDFE0", high: "\\uD83D\\uDD34", critical: "\\uD83D\\uDEAB",
         };
 
         const lines = [
-          `## Security Audit: "${name}"`,
+          `## Security Audit: "${name}" (${scope})`,
           `**Path**: \`${skill.path}\``,
+          `**Scope**: ${scope}`,
           `**Risk Level**: ${riskEmoji[skill.scanResult.riskLevel] || ""} ${skill.scanResult.riskLevel.toUpperCase()}`,
           `**Files Scanned**: ${skill.filesCount}`,
           `**Total Size**: ${Math.round(skill.totalSize / 1024)}KB`,
@@ -423,10 +480,10 @@ export function registerTools(server: McpServer): void {
     }
   );
 
-  // 9. Configure sync subscriptions
+  // 9. Configure sync subscriptions (with scope)
   server.tool(
     "skillsync_configure",
-    "Manage sync subscriptions and settings. Add/remove search subscriptions, configure sync interval, risk threshold, and conflict policy.",
+    'Manage sync subscriptions and settings. Use scope="project" for project-level config, or "global" (default).',
     {
       action: z.enum(["add", "remove", "list", "set"]).describe("Action: add subscription, remove subscription, list config, or set global options"),
       query: z.string().min(1).max(200).optional().describe("Search query for new subscription (action=add)"),
@@ -440,16 +497,20 @@ export function registerTools(server: McpServer): void {
       conflictPolicy: z.enum(["skip", "overwrite", "unmanage"]).optional().describe("How to handle locally modified skills (action=set)"),
       autoRemove: z.boolean().optional().describe("Auto-remove skills no longer in subscriptions (action=set)"),
       enabled: z.boolean().optional().describe("Enable/disable sync engine (action=set)"),
+      scope: scopeParam,
     },
-    async ({ action, query, authors, tags, limit, sortBy, subscriptionId, syncIntervalHours, maxRiskLevel, conflictPolicy, autoRemove, enabled }) => {
+    async ({ action, query, authors, tags, limit, sortBy, subscriptionId, syncIntervalHours, maxRiskLevel, conflictPolicy, autoRemove, enabled, scope }) => {
       try {
+        const paths = resolvePaths(scope as SkillScope);
+        const configPath = paths.syncConfigPath;
+
         if (action === "add") {
           if (!query) {
             return { content: [{ type: "text", text: "Missing required `query` parameter for add action." }], isError: true };
           }
-          const { config, subscription } = await addSubscription({ query, authors, tags, limit, sortBy });
+          const { config, subscription } = await addSubscription({ query, authors, tags, limit, sortBy }, configPath);
           const lines = [
-            `## Subscription Added`,
+            `## Subscription Added (${scope})`,
             "",
             `- **ID**: \`${subscription.id}\``,
             `- **Query**: "${sanitizeText(query)}"`,
@@ -466,11 +527,11 @@ export function registerTools(server: McpServer): void {
           if (!subscriptionId) {
             return { content: [{ type: "text", text: "Missing required `subscriptionId` parameter for remove action." }], isError: true };
           }
-          const { config, removed } = await removeSubscription(subscriptionId);
+          const { config, removed } = await removeSubscription(subscriptionId, configPath);
           if (!removed) {
             return { content: [{ type: "text", text: `Subscription \`${subscriptionId}\` not found.` }], isError: true };
           }
-          return { content: [{ type: "text", text: `## Subscription Removed\n\nID: \`${subscriptionId}\`\nRemaining subscriptions: ${config.subscriptions.length}` }] };
+          return { content: [{ type: "text", text: `## Subscription Removed (${scope})\n\nID: \`${subscriptionId}\`\nRemaining subscriptions: ${config.subscriptions.length}` }] };
         }
 
         if (action === "set") {
@@ -485,16 +546,17 @@ export function registerTools(server: McpServer): void {
             return { content: [{ type: "text", text: "No settings provided to update. Use parameters like `syncIntervalHours`, `maxRiskLevel`, etc." }], isError: true };
           }
 
-          const config = await mergeSyncConfig(partial as any);
+          const config = await mergeSyncConfig(partial as any, configPath);
 
           // Restart periodic sync if interval changed
           if (syncIntervalHours !== undefined) {
-            syncEngine.stopPeriodicSync();
-            await syncEngine.startPeriodicSync();
+            const engine = getSyncEngine(scope as SkillScope);
+            engine.stopPeriodicSync();
+            await engine.startPeriodicSync();
           }
 
           const lines = [
-            `## Settings Updated`,
+            `## Settings Updated (${scope})`,
             "",
             `- **Enabled**: ${config.enabled}`,
             `- **Sync Interval**: ${config.syncIntervalHours}h (0=manual)`,
@@ -507,9 +569,9 @@ export function registerTools(server: McpServer): void {
         }
 
         // action === "list"
-        const config = await readSyncConfig();
+        const config = await readSyncConfig(configPath);
         const lines = [
-          `## SkillSync Configuration`,
+          `## SkillSync Configuration (${scope})`,
           "",
           `- **Enabled**: ${config.enabled}`,
           `- **Sync Interval**: ${config.syncIntervalHours}h (0=manual only)`,
@@ -535,18 +597,20 @@ export function registerTools(server: McpServer): void {
     }
   );
 
-  // 10. Run sync now
+  // 10. Run sync now (with scope)
   server.tool(
     "skillsync_sync_now",
-    "Run a sync cycle: poll subscriptions, diff against installed skills, install/update/remove. Use dryRun=true to preview without changes.",
+    'Run a sync cycle: poll subscriptions, diff against installed skills, install/update/remove. Use scope="project" for project-level sync, or "global" (default).',
     {
       dryRun: z.boolean().default(false).describe("Preview changes without executing (default false)"),
+      scope: scopeParam,
     },
-    async ({ dryRun }) => {
+    async ({ dryRun, scope }) => {
       try {
-        const report = await syncEngine.sync({ dryRun });
+        const engine = getSyncEngine(scope as SkillScope);
+        const report = await engine.sync({ dryRun });
         const lines = [
-          `## Sync ${dryRun ? "Preview (Dry Run)" : "Complete"}`,
+          `## Sync ${dryRun ? "Preview (Dry Run)" : "Complete"} (${scope})`,
           "",
           `- **Started**: ${report.startedAt}`,
           `- **Finished**: ${report.finishedAt}`,
@@ -583,71 +647,88 @@ export function registerTools(server: McpServer): void {
     }
   );
 
-  // 11. Sync status
+  // 11. Sync status (with scope + "all")
   server.tool(
     "skillsync_status",
-    "Show sync engine status: managed vs manual skills, subscriptions, last sync time, next scheduled sync.",
-    {},
-    async () => {
+    'Show sync engine status: managed vs manual skills, subscriptions, last sync time, next scheduled sync. Use scope="all" for cross-scope view.',
+    {
+      scope: scopeParamAll,
+    },
+    async ({ scope }) => {
       try {
-        const status = await syncEngine.getStatus();
-        const lock = await readSyncLock();
-        const allSkills = skillManager.getAllSkills();
-        const managedNames = new Set(Object.keys(lock.skills));
-        const manualSkills = allSkills.filter((s) => !managedNames.has(s.name));
+        const scopes: SkillScope[] = scope === "all" ? ["global", "project"] : [scope as SkillScope];
+        const sections: string[] = [];
 
-        const lines = [
-          `## SkillSync Status`,
-          "",
-          `- **Enabled**: ${status.enabled}`,
-          `- **Syncing**: ${status.syncing ? "Yes (in progress)" : "No"}`,
-          `- **Sync Interval**: ${status.intervalHours}h${status.intervalHours === 0 ? " (manual only)" : ""}`,
-          `- **Last Sync**: ${status.lastSyncRun || "Never"}`,
-          `- **Sync Count**: ${status.syncCount}`,
-          `- **Next Sync**: ${status.nextSyncIn || "N/A"}`,
-          "",
-          `### Skills`,
-          `- **Managed** (sync-controlled): ${status.managedSkills}`,
-          `- **Manual** (user-installed): ${manualSkills.length}`,
-          `- **Total installed**: ${allSkills.length}`,
-          "",
-          `### Active Subscriptions: ${status.subscriptions}`,
-        ];
+        for (const s of scopes) {
+          await ensureManagerInitialized(s);
+          const engine = getSyncEngine(s);
+          const paths = resolvePaths(s);
+          const status = await engine.getStatus();
+          const lock = await readSyncLock(paths.syncLockPath);
+          const mgr = getSkillManager(s);
+          const allSkills = mgr.getAllSkills();
+          const managedNames = new Set(Object.keys(lock.skills));
+          const manualSkills = allSkills.filter((sk) => !managedNames.has(sk.name));
 
-        if (status.managedSkills > 0) {
-          lines.push("", "### Managed Skills", "", "| Skill | Risk | Synced | Source |", "|-------|------|--------|--------|");
-          for (const [name, locked] of Object.entries(lock.skills)) {
-            const url = sanitizeUrl(locked.githubUrl);
-            const urlShort = url.length > 50 ? url.substring(0, 47) + "..." : url;
-            lines.push(`| ${name} | ${locked.riskLevel} | ${locked.lastSynced.split("T")[0]} | ${urlShort} |`);
+          const lines = [
+            scope === "all" ? `### ${s.charAt(0).toUpperCase() + s.slice(1)} Scope` : `## SkillSync Status (${s})`,
+            "",
+            `- **Enabled**: ${status.enabled}`,
+            `- **Syncing**: ${status.syncing ? "Yes (in progress)" : "No"}`,
+            `- **Sync Interval**: ${status.intervalHours}h${status.intervalHours === 0 ? " (manual only)" : ""}`,
+            `- **Last Sync**: ${status.lastSyncRun || "Never"}`,
+            `- **Sync Count**: ${status.syncCount}`,
+            `- **Next Sync**: ${status.nextSyncIn || "N/A"}`,
+            "",
+            `#### Skills`,
+            `- **Managed** (sync-controlled): ${status.managedSkills}`,
+            `- **Manual** (user-installed): ${manualSkills.length}`,
+            `- **Total installed**: ${allSkills.length}`,
+            "",
+            `#### Active Subscriptions: ${status.subscriptions}`,
+          ];
+
+          if (status.managedSkills > 0) {
+            lines.push("", "#### Managed Skills", "", "| Skill | Risk | Synced | Source |", "|-------|------|--------|--------|");
+            for (const [name, locked] of Object.entries(lock.skills)) {
+              const url = sanitizeUrl(locked.githubUrl);
+              const urlShort = url.length > 50 ? url.substring(0, 47) + "..." : url;
+              lines.push(`| ${name} | ${locked.riskLevel} | ${locked.lastSynced.split("T")[0]} | ${urlShort} |`);
+            }
           }
+
+          if (manualSkills.length > 0) {
+            lines.push("", "#### Manual Skills (not sync-managed)", "");
+            for (const skill of manualSkills) {
+              lines.push(`- ${skill.name} (${skill.scanResult.riskLevel})`);
+            }
+          }
+
+          sections.push(lines.join("\n"));
         }
 
-        if (manualSkills.length > 0) {
-          lines.push("", "### Manual Skills (not sync-managed)", "");
-          for (const skill of manualSkills) {
-            lines.push(`- ${skill.name} (${skill.scanResult.riskLevel})`);
-          }
-        }
-
-        return { content: [{ type: "text", text: lines.join("\n") }] };
+        const header = scope === "all" ? "## SkillSync Status — All Scopes\n\n" : "";
+        return { content: [{ type: "text", text: header + sections.join("\n\n---\n\n") }] };
       } catch (error) {
         return { content: [{ type: "text", text: `Status failed: ${error instanceof Error ? error.message : "Unknown error"}` }], isError: true };
       }
     }
   );
 
-  // 12. AI-powered skill suggestions
+  // 12. AI-powered skill suggestions (with scope)
   server.tool(
     "skillsmp_suggest",
-    "AI-powered skill recommendations based on what you already have installed. Optionally provide context about what you're working on to improve relevance. WARNING: Results contain untrusted third-party content.",
+    'AI-powered skill recommendations based on what you already have installed. Use scope to specify which installed skills to base suggestions on.',
     {
       context: z.string().min(1).max(200).optional().describe("What you're working on (e.g. 'React testing', 'Python automation')"),
       limit: z.number().min(1).max(20).default(5).describe("Max suggestions (default 5)"),
+      scope: scopeParam,
     },
-    async ({ context, limit }) => {
+    async ({ context, limit, scope }) => {
       try {
-        const installed = skillManager.getAllSkills();
+        await ensureManagerInitialized(scope as SkillScope);
+        const mgr = getSkillManager(scope as SkillScope);
+        const installed = mgr.getAllSkills();
         const installedNames = new Set(installed.map((s) => s.name.toLowerCase()));
 
         // Build search query from installed skill names + optional context
@@ -676,14 +757,14 @@ export function registerTools(server: McpServer): void {
 
         if (suggestions.length === 0) {
           const noResultMsg = installed.length > 0
-            ? `No new skill suggestions found based on your ${installed.length} installed skill(s)${context ? ` and context "${sanitizeText(context)}"` : ""}.`
+            ? `No new skill suggestions found based on your ${installed.length} installed skill(s) in ${scope} scope${context ? ` and context "${sanitizeText(context)}"` : ""}.`
             : `No skill suggestions found${context ? ` for "${sanitizeText(context)}"` : ""}. Try providing a context parameter.`;
           return { content: [{ type: "text", text: noResultMsg }] };
         }
 
         const formatted = suggestions.map((s, i) => formatAiSkill(s, i)).join("\n\n---\n\n");
         const headerLines = [
-          `## Skill Suggestions`,
+          `## Skill Suggestions (${scope})`,
           "",
           `Based on ${installed.length > 0 ? `your ${installed.length} installed skill(s)` : "general recommendations"}${context ? ` and context: "${sanitizeText(context)}"` : ""}.`,
           `**${suggestions.length}** suggestion(s)`,
@@ -696,16 +777,20 @@ export function registerTools(server: McpServer): void {
     }
   );
 
-  // 13. Side-by-side skill comparison
+  // 13. Side-by-side skill comparison (with scope)
   server.tool(
     "skillsmp_compare",
-    "Side-by-side comparison of two skills including security scan results. Accepts GitHub URLs or installed skill names.",
+    'Side-by-side comparison of two skills including security scan results. Accepts GitHub URLs or installed skill names. Use scope to specify which installed skills to check.',
     {
       skillA: z.string().min(1).max(200).describe("GitHub URL or installed skill name for first skill"),
       skillB: z.string().min(1).max(200).describe("GitHub URL or installed skill name for second skill"),
+      scope: scopeParam,
     },
-    async ({ skillA, skillB }) => {
+    async ({ skillA, skillB, scope }) => {
       try {
+        await ensureManagerInitialized(scope as SkillScope);
+        const mgr = getSkillManager(scope as SkillScope);
+
         const resolveSkill = async (
           input: string
         ): Promise<{
@@ -742,7 +827,7 @@ export function registerTools(server: McpServer): void {
           }
 
           // Case 2: Installed skill name
-          const local = skillManager.getSkill(input);
+          const local = mgr.getSkill(input);
           if (local) {
             const categories = [
               ...new Set(local.scanResult.threats.map((t) => t.category)),
@@ -755,7 +840,7 @@ export function registerTools(server: McpServer): void {
               threatCount: local.scanResult.threats.length,
               threatCategories: categories,
               safe: local.scanResult.safe,
-              source: "installed locally",
+              source: `installed locally (${scope})`,
             };
           }
 

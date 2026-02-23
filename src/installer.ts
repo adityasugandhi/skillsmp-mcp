@@ -4,8 +4,6 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createHash } from "node:crypto";
 import {
-  SKILLS_DIR,
-  VALID_SKILL_NAME,
   MAX_FILES,
   MAX_FILE_SIZE,
   MAX_TOTAL_SIZE,
@@ -19,6 +17,12 @@ import {
   type FetchScanResult,
   type ParsedGitHubUrl,
 } from "./security-scanner.js";
+import {
+  type SkillScope,
+  resolvePaths,
+  validateSkillName,
+  safeSkillPath,
+} from "./scope-resolver.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -33,6 +37,7 @@ export interface InstallResult {
   hasSkillMd: boolean;
   npmInstalled: boolean;
   warnings: string[];
+  scope: SkillScope;
 }
 
 export interface UninstallResult {
@@ -41,20 +46,7 @@ export interface UninstallResult {
   message: string;
 }
 
-// ─── Path Safety ────────────────────────────────────────────────────────────
-
-function validateSkillName(name: string): boolean {
-  return VALID_SKILL_NAME.test(name);
-}
-
-function safeSkillPath(name: string): string {
-  const resolved = resolve(join(SKILLS_DIR, name));
-  const resolvedSkillsDir = resolve(SKILLS_DIR);
-  if (!resolved.startsWith(resolvedSkillsDir + "/")) {
-    throw new Error(`Path traversal detected: "${name}" resolves outside skills directory`);
-  }
-  return resolved;
-}
+// ─── Helpers ────────────────────────────────────────────────────────────────
 
 function inferSkillName(parsed: ParsedGitHubUrl): string {
   // Use last path segment as name
@@ -68,8 +60,10 @@ export async function installSkill(
   githubUrl: string,
   name?: string,
   force?: boolean,
+  scope: SkillScope = "global",
 ): Promise<InstallResult> {
   const warnings: string[] = [];
+  const paths = resolvePaths(scope);
 
   // 1. Validate URL
   const parsed = validateGithubUrl(githubUrl);
@@ -88,7 +82,7 @@ export async function installSkill(
   }
 
   // 3. Check if already installed
-  const installPath = safeSkillPath(skillName);
+  const installPath = safeSkillPath(paths.skillsDir, skillName);
   let exists = false;
   try {
     await stat(installPath);
@@ -191,19 +185,24 @@ export async function installSkill(
     hasSkillMd,
     npmInstalled,
     warnings,
+    scope,
   };
 }
 
 // ─── Uninstall ──────────────────────────────────────────────────────────────
 
-export async function uninstallSkill(name: string): Promise<UninstallResult> {
+export async function uninstallSkill(
+  name: string,
+  scope: SkillScope = "global",
+): Promise<UninstallResult> {
   if (!validateSkillName(name)) {
     throw new Error(
       `Invalid skill name "${name}". Must be alphanumeric with hyphens/underscores, 1-64 chars.`
     );
   }
 
-  const skillPath = safeSkillPath(name);
+  const paths = resolvePaths(scope);
+  const skillPath = safeSkillPath(paths.skillsDir, name);
 
   try {
     await stat(skillPath);

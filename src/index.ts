@@ -2,12 +2,12 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { registerTools } from "./tools.js";
-import { skillManager } from "./skill-manager.js";
-import { syncEngine } from "./sync-engine.js";
+import { getSkillManager, shutdownAllManagers } from "./skill-manager.js";
+import { getSyncEngine, shutdownAllEngines } from "./sync-engine.js";
 
 const server = new McpServer({
   name: "skillsync",
-  version: "1.3.0",
+  version: "1.4.0",
 });
 
 registerTools(server);
@@ -17,21 +17,22 @@ async function main() {
   await server.connect(transport);
   console.error("[skillsync] MCP server running on stdio");
 
-  // Background: discover and scan installed skills (non-blocking)
-  skillManager.initialize().catch((err) => {
+  // Background: discover and scan installed skills in global scope (non-blocking)
+  // Project-scope managers are created lazily when tools are called with scope="project"
+  getSkillManager("global").initialize().catch((err) => {
     console.error("[skillsync] Skill manager init error:", err instanceof Error ? err.message : err);
   });
 
-  // Background: start periodic sync if configured
-  syncEngine.startPeriodicSync().catch((err) => {
+  // Background: start periodic sync if configured (global scope)
+  getSyncEngine("global").startPeriodicSync().catch((err) => {
     console.error("[skillsync] Sync engine error:", err instanceof Error ? err.message : err);
   });
 
   // Graceful shutdown
   const shutdown = async () => {
     console.error("[skillsync] Shutting down...");
-    syncEngine.shutdown();
-    skillManager.shutdown();
+    shutdownAllEngines();
+    shutdownAllManagers();
     try {
       await server.close();
     } catch {
@@ -56,7 +57,7 @@ main().catch((error) => {
 export function createSandboxServer() {
   const sandboxServer = new McpServer({
     name: "skillsync",
-    version: "1.3.0",
+    version: "1.4.0",
   });
   registerTools(sandboxServer);
   return sandboxServer;
