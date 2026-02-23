@@ -7,7 +7,7 @@ import { getSyncEngine, shutdownAllEngines } from "./sync-engine.js";
 
 const server = new McpServer({
   name: "skillsync",
-  version: "1.4.0",
+  version: "1.4.1",
 });
 
 registerTools(server);
@@ -57,7 +57,7 @@ main().catch((error) => {
 export function createSandboxServer() {
   const sandboxServer = new McpServer({
     name: "skillsync",
-    version: "1.4.0",
+    version: "1.4.1",
   });
   registerTools(sandboxServer);
   return sandboxServer;

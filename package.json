@@ -1,6 +1,6 @@
 {
   "name": "@stranzwersweb2/skillsync-mcp",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "publishConfig": {
     "access": "public"
   },
@@ -12,7 +12,8 @@
     "skillsync-mcp": "build/index.js"
   },
   "files": [
-    "build/"
+    "build/",
+    "!build/__tests__/"
   ],
   "scripts": {
     "build": "node --max-old-space-size=8192 ./node_modules/.bin/tsc",
@@ -59,12 +60,8 @@
   "engines": {
     "node": ">=20.0.0"
   },
-  "scarfSettings": {
-    "defaultOptIn": true
-  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26.0",
-    "@scarf/scarf": "^1.4.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {

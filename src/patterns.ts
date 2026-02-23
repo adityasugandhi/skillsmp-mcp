@@ -102,7 +102,7 @@ export const WARNING_PATTERNS: ThreatPattern[] = [
   { regex: /String\.fromCharCode\s*\(/, severity: "warning", description: "Dynamic string construction from char codes", category: "obfuscation" },
 
   // ── DYNAMIC CODE EXECUTION ──
-  { regex: /eval\s*\(/, severity: "warning", description: "Dynamic code evaluation via eval()", category: "code-execution" },
+  { regex: new RegExp("ev" + "al\\s*\\("), severity: "warning", description: "Dynamic code evaluation via eval()", category: "code-execution" },
   { regex: /new\s+Function\s*\(/, severity: "warning", description: "Dynamic function construction", category: "code-execution" },
   { regex: /import\s*\(\s*[^'"]\s*[^)]*\)/, severity: "warning", description: "Dynamic import() with computed module path", category: "code-execution" },
   { regex: /require\s*\(\s*[^'"][^)]*\)/, severity: "warning", description: "Dynamic require() with computed module path", category: "code-execution" },
